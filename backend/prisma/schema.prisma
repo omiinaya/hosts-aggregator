@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Source {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  url               String?
+  filePath          String?
+  type              String   // URL, FILE
+  enabled           Boolean  @default(true)
+  lastFetched       DateTime?
+  lastChecked       DateTime?
+  lastFetchStatus   String?   // SUCCESS, ERROR, PENDING
+  entryCount        Int      @default(0)
+  metadata          String?  // JSON string
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("sources")
+}
+
+model AggregationResult {
+  id                String   @id @default(cuid())
+  timestamp         DateTime @default(now())
+  totalSources      Int
+  totalEntries      Int
+  uniqueEntries     Int
+  duplicatesRemoved Int
+  filePath          String
+  sourcesUsed       String   // JSON array string
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("aggregation_results")
+}
