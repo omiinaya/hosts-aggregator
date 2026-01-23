@@ -119,4 +119,49 @@ export class AggregateController {
       next(error);
     }
   }
+
+  async getAggregationStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      // For now, return a simple status
+      // In a real implementation, this would check if aggregation is running
+      const latestAggregation = await this.aggregationService.getLatestAggregation();
+      
+      res.json({
+        status: 'success',
+        data: {
+          status: latestAggregation ? 'completed' : 'idle',
+          progress: 100,
+          totalSources: 0,
+          processedSources: 0
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to get aggregation status:', error);
+      next(error);
+    }
+  }
+
+  async getLatestHostsFile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const latestAggregation = await this.aggregationService.getLatestAggregation();
+
+      if (!latestAggregation) {
+        return next(createError('No aggregation results found', 404));
+      }
+
+      res.json({
+        status: 'success',
+        data: {
+          id: latestAggregation.id,
+          filename: latestAggregation.filePath.split('/').pop() || 'unified-hosts.txt',
+          size: 0, // Would need to get actual file size
+          createdAt: latestAggregation.timestamp.toISOString(),
+          totalEntries: 0 // Would need to parse file
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to get latest hosts file:', error);
+      next(error);
+    }
+  }
 }

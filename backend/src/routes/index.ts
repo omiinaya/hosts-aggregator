@@ -6,6 +6,6 @@ const router = Router();
 
 // Mount API routes
 router.use('/sources', sourcesRouter);
-router.use('/aggregated', aggregateRouter);
+router.use('/aggregate', aggregateRouter);
 
 export { router as apiRouter };

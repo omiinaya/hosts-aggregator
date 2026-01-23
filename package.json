@@ -1,0 +1,22 @@
+{
+  "name": "hosts-aggregator",
+  "version": "1.0.0",
+  "description": "A Node.js TypeScript web application for aggregating adblocker hosts files from multiple sources",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "concurrently \"npm run build:backend\" \"npm run build:frontend\"",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "install:all": "concurrently \"npm run install:backend\" \"npm run install:frontend\"",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": ["adblocker", "hosts", "aggregation", "nodejs", "typescript", "react"],
+  "author": "Hosts Aggregator Team",
+  "license": "MIT"
+}

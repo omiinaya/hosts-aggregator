@@ -153,7 +153,7 @@ const Aggregate = () => {
                   </div>
                 </div>
                 <a 
-                  href={`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/aggregate/download/${latestFile.id}`}
+                  href={`${import.meta.env.VITE_API_BASE_URL}/aggregate/download/${latestFile.id}`}
                   download={latestFile.filename}
                 >
                   <Button>

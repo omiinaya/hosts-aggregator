@@ -37,16 +37,14 @@ hosts-aggregator/
 ### Installation
 
 1. Clone the repository
-2. Install backend dependencies:
+2. Install root-level dependencies:
    ```bash
-   cd backend
    npm install
    ```
 
-3. Install frontend dependencies:
+3. Install backend and frontend dependencies:
    ```bash
-   cd ../frontend
-   npm install
+   npm run install:all
    ```
 
 4. Set up environment variables:
@@ -67,6 +65,13 @@ hosts-aggregator/
 
 ### Development
 
+Start both servers concurrently from the root directory:
+```bash
+npm run dev
+```
+
+Or start them individually:
+
 Start the backend server:
 ```bash
 cd backend
@@ -79,7 +84,9 @@ cd frontend
 npm run dev
 ```
 
-Access the application at http://localhost:3000
+Access the application at http://localhost:3011
+
+Backend API is available at http://localhost:3010/api
 
 ## Technology Stack
 

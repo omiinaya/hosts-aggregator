@@ -9,7 +9,7 @@ import { Save, RefreshCw, Trash2 } from 'lucide-react'
 
 const Settings = () => {
   const [settings, setSettings] = useState({
-    apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3001',
+    apiUrl: import.meta.env.VITE_API_BASE_URL,
     autoRefresh: true,
     refreshInterval: '5',
     theme: 'system',
@@ -25,7 +25,7 @@ const Settings = () => {
 
   const handleReset = () => {
     setSettings({
-      apiUrl: 'http://localhost:3001',
+      apiUrl: 'http://192.168.1.35:3010/api',
       autoRefresh: true,
       refreshInterval: '5',
       theme: 'system',
@@ -64,7 +64,7 @@ const Settings = () => {
                   id="apiUrl"
                   value={settings.apiUrl}
                   onChange={(e) => setSettings({ ...settings, apiUrl: e.target.value })}
-                  placeholder="http://localhost:3001"
+                  placeholder="http://192.168.1.35:3010/api"
                 />
               </div>
               <div>

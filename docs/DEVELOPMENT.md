@@ -16,16 +16,14 @@
    cd hosts-aggregator
    ```
 
-2. **Install backend dependencies:**
+2. **Install root-level dependencies:**
    ```bash
-   cd backend
    npm install
    ```
 
-3. **Install frontend dependencies:**
+3. **Install backend and frontend dependencies:**
    ```bash
-   cd ../frontend
-   npm install
+   npm run install:all
    ```
 
 4. **Set up environment variables:**
@@ -48,19 +46,26 @@
 
 #### Starting Development Servers
 
+**Option 1: Start both servers concurrently:**
+```bash
+npm run dev
+```
+
+**Option 2: Start servers individually:**
+
 1. **Start the backend server:**
    ```bash
    cd backend
    npm run dev
    ```
-   The backend will run on `http://localhost:3001`
+   The backend will run on `http://localhost:3010`
 
 2. **Start the frontend development server:**
    ```bash
    cd frontend
    npm run dev
    ```
-   The frontend will run on `http://localhost:3000`
+   The frontend will run on `http://localhost:3011`
 
 #### Development Tools
 
@@ -280,7 +285,7 @@ npm run type-check   # TypeScript type checking
 Create `backend/.env` file:
 
 ```env
-PORT=3001
+PORT=3010
 NODE_ENV=development
 DATABASE_URL="file:./dev.db"
 CACHE_DIR="./data/cache"
@@ -297,7 +302,7 @@ RATE_LIMIT_MAX_REQUESTS=100
 Create `frontend/.env` file:
 
 ```env
-VITE_API_BASE_URL=http://localhost:3001/api
+VITE_API_BASE_URL=http://localhost:3010/api
 VITE_APP_NAME="Hosts Aggregator"
 VITE_APP_VERSION=1.0.0
 VITE_LOG_LEVEL="info"
@@ -395,14 +400,14 @@ npx prisma studio
 ### Common Issues
 
 **Backend won't start:**
-- Check if port 3001 is available
+- Check if port 3010 is available
 - Verify database connection
 - Check environment variables
 
 **Frontend won't connect to backend:**
-- Verify backend is running
+- Verify backend is running on port 3010
 - Check CORS configuration
-- Verify API base URL
+- Verify API base URL is set to http://localhost:3010/api
 
 **Database issues:**
 - Run database migrations

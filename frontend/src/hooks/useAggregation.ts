@@ -2,13 +2,13 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { AggregationStatus, UnifiedHostsFile } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 // Start aggregation
 export const useStartAggregation = () => {
   return useMutation({
     mutationFn: async (): Promise<AggregationStatus> => {
-      const response = await fetch(`${API_BASE_URL}/api/aggregate`, {
+      const response = await fetch(`${API_BASE_URL}/aggregate`, {
         method: 'POST',
       })
       
@@ -34,7 +34,7 @@ export const useAggregationStatus = () => {
   return useQuery({
     queryKey: ['aggregation-status'],
     queryFn: async (): Promise<AggregationStatus> => {
-      const response = await fetch(`${API_BASE_URL}/api/aggregate/status`)
+      const response = await fetch(`${API_BASE_URL}/aggregate/status`)
       
       if (!response.ok) {
         throw new Error('Failed to fetch aggregation status')
@@ -55,7 +55,7 @@ export const useLatestHostsFile = () => {
   return useQuery({
     queryKey: ['latest-hosts-file'],
     queryFn: async (): Promise<UnifiedHostsFile | null> => {
-      const response = await fetch(`${API_BASE_URL}/api/aggregate/latest`)
+      const response = await fetch(`${API_BASE_URL}/aggregate/latest`)
       
       if (!response.ok) {
         if (response.status === 404) {

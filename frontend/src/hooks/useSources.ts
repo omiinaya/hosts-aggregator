@@ -2,14 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Source, CreateSourceRequest, UpdateSourceRequest } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 // Fetch all sources
 export const useSources = () => {
   return useQuery({
     queryKey: ['sources'],
     queryFn: async (): Promise<Source[]> => {
-      const response = await fetch(`${API_BASE_URL}/api/sources`)
+      const response = await fetch(`${API_BASE_URL}/sources`)
       if (!response.ok) {
         throw new Error('Failed to fetch sources')
       }
@@ -25,7 +25,7 @@ export const useCreateSource = () => {
   
   return useMutation({
     mutationFn: async (source: CreateSourceRequest): Promise<Source> => {
-      const response = await fetch(`${API_BASE_URL}/api/sources`, {
+      const response = await fetch(`${API_BASE_URL}/sources`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,7 +57,7 @@ export const useUpdateSource = () => {
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: UpdateSourceRequest & { id: string }): Promise<Source> => {
-      const response = await fetch(`${API_BASE_URL}/api/sources/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/sources/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -89,7 +89,7 @@ export const useDeleteSource = () => {
   
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const response = await fetch(`${API_BASE_URL}/api/sources/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/sources/${id}`, {
         method: 'DELETE',
       })
       

@@ -15,11 +15,13 @@ export default defineConfig({
     }
   },
   server: {
-    port: 3000,
+    port: 3011,
+    host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+        secure: false
       }
     }
   },
