@@ -2,11 +2,13 @@ import React from 'react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { useSources } from '../hooks/useSources'
+import useApiStatus from '../hooks/useApiStatus'
 import { Link } from 'react-router-dom'
-import { Database, Plus } from 'lucide-react'
+import { Database, Plus, Server, Wifi, WifiOff, RefreshCw } from 'lucide-react'
 
 const Dashboard = () => {
   const { data: sources } = useSources()
+  const { status, serveInfo, refreshStatus } = useApiStatus()
 
   const enabledSources = sources?.filter(source => source.enabled) || []
 
@@ -26,6 +28,22 @@ const Dashboard = () => {
       icon: Database,
       color: 'text-green-600',
       bgColor: 'bg-green-100'
+    },
+    {
+      title: 'Backend API',
+      value: status.backend === 'online' ? 'Online' : status.backend === 'offline' ? 'Offline' : 'Checking...',
+      description: 'Server status',
+      icon: Server,
+      color: status.backend === 'online' ? 'text-green-600' : status.backend === 'offline' ? 'text-red-600' : 'text-yellow-600',
+      bgColor: status.backend === 'online' ? 'bg-green-100' : status.backend === 'offline' ? 'bg-red-100' : 'bg-yellow-100'
+    },
+    {
+      title: 'Serve Endpoint',
+      value: status.serveEndpoint === 'online' ? 'Online' : status.serveEndpoint === 'offline' ? 'Offline' : 'Checking...',
+      description: serveInfo?.hasHostsFile ? `${serveInfo.totalEntries} entries` : 'No hosts file',
+      icon: Wifi,
+      color: status.serveEndpoint === 'online' ? 'text-green-600' : status.serveEndpoint === 'offline' ? 'text-red-600' : 'text-yellow-600',
+      bgColor: status.serveEndpoint === 'online' ? 'bg-green-100' : status.serveEndpoint === 'offline' ? 'bg-red-100' : 'bg-yellow-100'
     }
   ]
 
@@ -37,6 +55,14 @@ const Dashboard = () => {
       href: '/sources',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50'
+    },
+    {
+      title: 'Serve Endpoint',
+      description: 'Access the unified hosts file for Pi-hole/AdGuard Home',
+      icon: Server,
+      href: `${window.location.protocol}//${window.location.hostname}:3010/api/serve/hosts`,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50'
     }
   ]
 
@@ -86,11 +112,19 @@ const Dashboard = () => {
                   <div className="flex-1">
                     <h3 className="font-semibold mb-1">{action.title}</h3>
                     <p className="text-sm text-muted-foreground mb-3">{action.description}</p>
-                    <Button asChild variant="outline" size="sm">
-                      <Link to={action.href}>
-                        Go to {action.title.split(' ')[0]}
-                      </Link>
-                    </Button>
+                    {action.href.startsWith('http') ? (
+                      <Button asChild variant="outline" size="sm">
+                        <a href={action.href} target="_blank" rel="noopener noreferrer">
+                          Open {action.title.split(' ')[0]}
+                        </a>
+                      </Button>
+                    ) : (
+                      <Button asChild variant="outline" size="sm">
+                        <Link to={action.href}>
+                          Go to {action.title.split(' ')[0]}
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -98,6 +132,88 @@ const Dashboard = () => {
           )
         })}
       </div>
+
+      {/* API Status Section */}
+      <Card className="mb-8">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Server className="h-5 w-5" />
+              <CardTitle>API Status</CardTitle>
+            </div>
+            <Button variant="outline" size="sm" onClick={refreshStatus}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+          <CardDescription>
+            Monitor the status of your backend API and serve endpoints
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Backend Status */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${
+                  status.backend === 'online' ? 'bg-green-100 text-green-600' :
+                  status.backend === 'offline' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                }`}>
+                  {status.backend === 'online' ? <Wifi className="h-4 w-4" /> :
+                   status.backend === 'offline' ? <WifiOff className="h-4 w-4" /> :
+                   <RefreshCw className="h-4 w-4 animate-spin" />}
+                </div>
+                <div>
+                  <div className="font-medium">Backend API</div>
+                  <div className="text-sm text-muted-foreground">{`${window.location.protocol}//${window.location.hostname}:3010`}</div>
+                </div>
+              </div>
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                status.backend === 'online' ? 'bg-green-100 text-green-800' :
+                status.backend === 'offline' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {status.backend === 'online' ? 'Online' : status.backend === 'offline' ? 'Offline' : 'Checking...'}
+              </div>
+            </div>
+
+            {/* Serve Endpoint Status */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${
+                  status.serveEndpoint === 'online' ? 'bg-green-100 text-green-600' :
+                  status.serveEndpoint === 'offline' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                }`}>
+                  {status.serveEndpoint === 'online' ? <Wifi className="h-4 w-4" /> :
+                   status.serveEndpoint === 'offline' ? <WifiOff className="h-4 w-4" /> :
+                   <RefreshCw className="h-4 w-4 animate-spin" />}
+                </div>
+                <div>
+                  <div className="font-medium">Serve Endpoint</div>
+                  <div className="text-sm text-muted-foreground">{`${window.location.protocol}//${window.location.hostname}:3010/api/serve/hosts`}</div>
+                  {serveInfo && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {serveInfo.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                status.serveEndpoint === 'online' ? 'bg-green-100 text-green-800' :
+                status.serveEndpoint === 'offline' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {status.serveEndpoint === 'online' ? 'Online' : status.serveEndpoint === 'offline' ? 'Offline' : 'Checking...'}
+              </div>
+            </div>
+
+            {/* Last Checked */}
+            {status.lastChecked && (
+              <div className="text-xs text-muted-foreground text-right">
+                Last checked: {status.lastChecked.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Sources Overview */}
       <Card>
