@@ -17,8 +17,6 @@ interface MainLayoutProps {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Sources', href: '/sources', icon: Database },
-  { name: 'Aggregate', href: '/aggregate', icon: FileText },
-  { name: 'Download', href: '/download', icon: Download },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

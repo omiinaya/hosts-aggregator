@@ -4,20 +4,8 @@ import { AggregateController } from '../controllers/aggregate.controller';
 const router = Router();
 const aggregateController = new AggregateController();
 
-// POST /api/aggregate - Trigger aggregation
-router.post('/', aggregateController.aggregate.bind(aggregateController));
-
 // GET /api/aggregate - Get latest aggregation result
 router.get('/', aggregateController.getAggregated.bind(aggregateController));
-
-// GET /api/aggregate/status - Get aggregation status (for frontend)
-router.get('/status', aggregateController.getAggregationStatus.bind(aggregateController));
-
-// GET /api/aggregate/latest - Get latest unified hosts file (for frontend)
-router.get('/latest', aggregateController.getLatestHostsFile.bind(aggregateController));
-
-// GET /api/aggregate/download/:id - Download unified hosts file
-router.get('/download/:id', aggregateController.downloadAggregated.bind(aggregateController));
 
 // GET /api/aggregate/stats - Get aggregation statistics
 router.get('/stats', aggregateController.getAggregationStats.bind(aggregateController));
