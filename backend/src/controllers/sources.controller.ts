@@ -56,7 +56,7 @@ export class SourcesController {
 
   async createSource(req: Request, res: Response, next: NextFunction) {
     try {
-      const { name, url, filePath, type, enabled = true, metadata } = req.body;
+      const { name, url, enabled = true, metadata } = req.body;
 
       // Check if source with same name already exists
       const existingSource = await prisma.source.findUnique({
@@ -70,9 +70,9 @@ export class SourcesController {
       const source = await prisma.source.create({
         data: {
           name,
-          url: type === 'URL' ? url : null,
-          filePath: type === 'FILE' ? filePath : null,
-          type,
+          url,
+          filePath: null,
+          type: 'URL',
           enabled,
           metadata: metadata ? JSON.stringify(metadata) : null
         }
@@ -101,7 +101,7 @@ export class SourcesController {
   async updateSource(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      const { name, url, filePath, enabled, metadata } = req.body;
+      const { name, url, enabled, metadata } = req.body;
 
       const existingSource = await prisma.source.findUnique({
         where: { id }
@@ -125,7 +125,6 @@ export class SourcesController {
       const updateData: any = {};
       if (name) updateData.name = name;
       if (url !== undefined) updateData.url = url;
-      if (filePath !== undefined) updateData.filePath = filePath;
       if (enabled !== undefined) updateData.enabled = enabled;
       if (metadata !== undefined) updateData.metadata = JSON.stringify(metadata);
 

@@ -15,9 +15,7 @@ export interface HostsSource {
 
 export interface CreateSourceRequest {
   name: string;
-  url?: string;
-  filePath?: string;
-  type: 'URL' | 'FILE';
+  url: string;
   enabled?: boolean;
   metadata?: Record<string, any>;
 }
@@ -25,7 +23,6 @@ export interface CreateSourceRequest {
 export interface UpdateSourceRequest {
   name?: string;
   url?: string;
-  filePath?: string;
   enabled?: boolean;
   metadata?: Record<string, any>;
 }

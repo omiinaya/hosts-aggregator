@@ -9,21 +9,11 @@ export const validateCreateSource = [
     .isLength({ min: 1, max: 255 })
     .withMessage('Name must be between 1 and 255 characters'),
   
-  body('type')
-    .isIn(['URL', 'FILE'])
-    .withMessage('Type must be either URL or FILE'),
-  
   body('url')
-    .if(body('type').equals('URL'))
     .notEmpty()
-    .withMessage('URL is required for URL sources')
+    .withMessage('URL is required')
     .isURL()
     .withMessage('URL must be a valid URL'),
-  
-  body('filePath')
-    .if(body('type').equals('FILE'))
-    .notEmpty()
-    .withMessage('File path is required for FILE sources'),
 
   body('enabled')
     .optional()
