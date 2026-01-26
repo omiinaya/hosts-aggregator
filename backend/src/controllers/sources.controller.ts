@@ -2,8 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { createError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
+import { AutoAggregationService } from '../services/auto-aggregation.service';
 
 export class SourcesController {
+  private autoAggregationService: AutoAggregationService;
+
+  constructor() {
+    this.autoAggregationService = new AutoAggregationService();
+  }
   async getAllSources(req: Request, res: Response, next: NextFunction) {
     try {
       const sources = await prisma.source.findMany({
@@ -72,6 +78,13 @@ export class SourcesController {
         }
       });
 
+      // Trigger automatic aggregation in background if source is enabled
+      if (enabled) {
+        this.autoAggregationService.triggerAggregation().catch(error => {
+          logger.error('Failed to trigger auto-aggregation after source creation:', error);
+        });
+      }
+
       res.status(201).json({
         status: 'success',
         data: {
@@ -121,6 +134,17 @@ export class SourcesController {
         data: updateData
       });
 
+      // Trigger automatic aggregation if source is enabled or was enabled before update
+      const shouldTriggerAggregation = 
+        (enabled !== undefined && enabled) || 
+        (enabled === undefined && existingSource.enabled);
+      
+      if (shouldTriggerAggregation) {
+        this.autoAggregationService.triggerAggregation().catch(error => {
+          logger.error('Failed to trigger auto-aggregation after source update:', error);
+        });
+      }
+
       res.json({
         status: 'success',
         data: {
@@ -150,6 +174,13 @@ export class SourcesController {
         where: { id }
       });
 
+      // Trigger automatic aggregation if source was enabled
+      if (source.enabled) {
+        this.autoAggregationService.triggerAggregation().catch(error => {
+          logger.error('Failed to trigger auto-aggregation after source deletion:', error);
+        });
+      }
+
       res.status(204).send();
     } catch (error) {
       logger.error(`Failed to delete source ${req.params.id}:`, error);
@@ -174,6 +205,11 @@ export class SourcesController {
         data: {
           enabled: !source.enabled
         }
+      });
+
+      // Always trigger aggregation when toggling (enabled state changed)
+      this.autoAggregationService.triggerAggregation().catch(error => {
+        logger.error('Failed to trigger auto-aggregation after source toggle:', error);
       });
 
       res.json({
