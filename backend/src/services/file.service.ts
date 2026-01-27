@@ -44,14 +44,19 @@ export class FileService {
     }
   }
 
-  async generateUnifiedHostsFile(domains: string[]): Promise<string> {
+  async generateUnifiedHostsFile(
+    domains: string[],
+    sourceCount: number,
+    sourceNames?: string[]
+  ): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filePath = path.join(this.generatedDir, `unified-hosts-${timestamp}.txt`);
     
     const header = `# Unified Hosts File
 # Generated: ${new Date().toISOString()}
 # Total domains: ${domains.length}
-# Sources: ${domains.length > 0 ? 'multiple' : 'none'}
+# Sources: ${sourceCount}
+${sourceNames ? `# Source list: ${sourceNames.join(', ')}` : ''}
 
 `;
 
@@ -87,6 +92,20 @@ export class FileService {
     }
   }
 
+  async deleteCachedContent(sourceId: string): Promise<void> {
+    const filePath = path.join(this.cacheDir, `${sourceId}.txt`);
+    try {
+      await fs.unlink(filePath);
+      logger.info(`Deleted cached content for source ${sourceId}`);
+    } catch (error) {
+      if ((error as any).code !== 'ENOENT') {
+        logger.error(`Failed to delete cached content for source ${sourceId}:`, error);
+        throw error;
+      }
+      // File doesn't exist, which is fine
+    }
+  }
+
   async cleanupOldFiles(maxAge: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
     // Clean up files older than maxAge (default: 7 days)
     try {
@@ -104,6 +123,26 @@ export class FileService {
       }
     } catch (error) {
       logger.error('Failed to cleanup old files:', error);
+    }
+  }
+
+  async cleanupOrphanedCacheFiles(validSourceIds: string[]): Promise<void> {
+    try {
+      const files = await fs.readdir(this.cacheDir);
+      const validIds = new Set(validSourceIds);
+
+      for (const file of files) {
+        if (!file.endsWith('.txt')) continue;
+
+        const sourceId = file.replace('.txt', '');
+        if (!validIds.has(sourceId)) {
+          const filePath = path.join(this.cacheDir, file);
+          await fs.unlink(filePath);
+          logger.info(`Cleaned up orphaned cache file: ${file}`);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to cleanup orphaned cache files:', error);
     }
   }
 }

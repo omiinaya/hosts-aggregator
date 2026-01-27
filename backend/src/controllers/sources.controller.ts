@@ -3,12 +3,15 @@ import { prisma } from '../config/database';
 import { createError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
 import { AutoAggregationService } from '../services/auto-aggregation.service';
+import { FileService } from '../services/file.service';
 
 export class SourcesController {
   private autoAggregationService: AutoAggregationService;
+  private fileService: FileService;
 
   constructor() {
     this.autoAggregationService = new AutoAggregationService();
+    this.fileService = new FileService();
   }
   async getAllSources(req: Request, res: Response, next: NextFunction) {
     try {
@@ -168,6 +171,9 @@ export class SourcesController {
       if (!source) {
         return next(createError('Source not found', 404));
       }
+
+      // Delete cached content BEFORE removing from database
+      await this.fileService.deleteCachedContent(id);
 
       await prisma.source.delete({
         where: { id }

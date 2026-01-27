@@ -23,6 +23,9 @@ export class AggregationService {
         where: { enabled: true }
       });
 
+      // Clean up orphaned cache files
+      await this.fileService.cleanupOrphanedCacheFiles(sources.map(s => s.id));
+
       if (sources.length === 0) {
         return {
           totalSources: 0,
@@ -72,8 +75,12 @@ export class AggregationService {
       // Process entries to remove duplicates and apply allow rules
       const result = this.processEntries(allEntries);
 
-      // Generate unified hosts file
-      const filePath = await this.fileService.generateUnifiedHostsFile(result.blockedDomains);
+      // Generate unified hosts file with actual source count
+      const filePath = await this.fileService.generateUnifiedHostsFile(
+        result.blockedDomains,
+        processedSources.length,
+        sources.map(s => s.name)
+      );
 
       // Save aggregation result
       await prisma.aggregationResult.create({
