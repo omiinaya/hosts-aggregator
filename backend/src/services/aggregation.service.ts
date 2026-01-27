@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import { HostsParser } from './parser.service';
 import { FileService } from './file.service';
 import { prisma } from '../config/database';
@@ -16,15 +17,12 @@ export class AggregationService {
 
   async aggregateSources(): Promise<AggregationStats> {
     const startTime = Date.now();
-    
+
     try {
       // Get all enabled sources
       const sources = await prisma.source.findMany({
         where: { enabled: true }
       });
-
-      // Clean up orphaned cache files
-      await this.fileService.cleanupOrphanedCacheFiles(sources.map(s => s.id));
 
       if (sources.length === 0) {
         return {
@@ -40,35 +38,50 @@ export class AggregationService {
 
       const allEntries: ParsedEntry[] = [];
       const processedSources: string[] = [];
+      const sourceStats: Map<string, { entries: number; duration: number; status: string }> = new Map();
 
       // Process each source
       for (const source of sources) {
+        const sourceStartTime = Date.now();
         try {
+          // Verify source still exists before processing
+          const sourceExists = await prisma.source.findUnique({
+            where: { id: source.id },
+            select: { id: true }
+          });
+
+          if (!sourceExists) {
+            logger.warn(`Source ${source.id} no longer exists, skipping`);
+            continue;
+          }
+
           const content = await this.fetchSourceContent(source);
           const entries = this.parser.parseContent(content, source.id, 'standard');
-          
+
+          // Store entries in database with host relationships
+          await this.storeSourceEntries(source.id, entries);
+
           allEntries.push(...entries);
           processedSources.push(source.id);
 
-          // Update source entry count
-          await prisma.source.update({
-            where: { id: source.id },
-            data: {
-              entryCount: entries.length,
-              lastFetched: new Date(),
-              lastFetchStatus: 'SUCCESS'
-            }
-          });
+          const duration = Date.now() - sourceStartTime;
+          sourceStats.set(source.id, { entries: entries.length, duration, status: 'SUCCESS' });
+
+          // Log successful fetch
+          await this.logSourceFetch(source.id, 'SUCCESS', 200, null, duration, entries.length);
         } catch (error) {
+          const duration = Date.now() - sourceStartTime;
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           logger.error(`Failed to process source ${source.id}:`, error);
-          
-          await prisma.source.update({
-            where: { id: source.id },
-            data: {
-              lastFetched: new Date(),
-              lastFetchStatus: 'ERROR'
-            }
-          });
+
+          sourceStats.set(source.id, { entries: 0, duration, status: 'ERROR' });
+
+          // Log failed fetch (only if source still exists)
+          try {
+            await this.logSourceFetch(source.id, 'ERROR', null, errorMessage, duration, 0);
+          } catch (logError) {
+            logger.warn(`Could not log fetch error for source ${source.id}:`, logError);
+          }
         }
       }
 
@@ -82,17 +95,81 @@ export class AggregationService {
         sources.map(s => s.name)
       );
 
-      // Save aggregation result
-      await prisma.aggregationResult.create({
+      // Get file size
+      const fileStats = await this.fileService.getFileStats(filePath);
+      const fileHash = crypto.createHash('sha256').update(result.blockedDomains.join('\n')).digest('hex');
+
+      // Save aggregation result with detailed statistics
+      const aggregationResult = await prisma.aggregationResult.create({
         data: {
-          totalSources: processedSources.length,
+          totalSources: sources.length,
+          successfulSources: processedSources.length,
+          failedSources: sources.length - processedSources.length,
           totalEntries: allEntries.length,
           uniqueEntries: result.blockedDomains.length,
           duplicatesRemoved: allEntries.length - result.blockedDomains.length,
+          allowEntries: result.allowedDomains.length,
+          blockEntries: result.blockedDomains.length,
+          processingTimeMs: Date.now() - startTime,
+          triggeredBy: 'manual',
           filePath,
-          sourcesUsed: JSON.stringify(processedSources)
+          fileSizeBytes: fileStats?.size || null,
+          fileHash
         }
       });
+
+      // Create aggregation source records
+      for (const [sourceId, stats] of sourceStats) {
+        try {
+          await prisma.aggregationSource.create({
+            data: {
+              aggregationResultId: aggregationResult.id,
+              sourceId,
+              entriesContributed: stats.entries,
+              fetchStatus: stats.status as 'SUCCESS' | 'ERROR' | 'CACHED' | 'SKIPPED',
+              fetchDurationMs: stats.duration
+            }
+          });
+        } catch (error) {
+          logger.warn(`Could not create aggregation source record for ${sourceId}:`, error);
+        }
+      }
+
+      // Create aggregation host records
+      const domainToSources = new Map<string, string[]>();
+      for (const entry of allEntries) {
+        if (entry.type === 'block' && !domainToSources.has(entry.domain)) {
+          domainToSources.set(entry.domain, []);
+        }
+        if (entry.type === 'block') {
+          const sources = domainToSources.get(entry.domain)!;
+          if (!sources.includes(entry.source)) {
+            sources.push(entry.source);
+          }
+        }
+      }
+
+      for (const domain of result.blockedDomains) {
+        try {
+          const hostEntry = await prisma.hostEntry.findUnique({
+            where: { normalized: domain.toLowerCase() }
+          });
+
+          if (hostEntry) {
+            const sourceIds = domainToSources.get(domain) || [];
+            await prisma.aggregationHost.create({
+              data: {
+                aggregationResultId: aggregationResult.id,
+                hostEntryId: hostEntry.id,
+                sourceIds: JSON.stringify(sourceIds),
+                primarySourceId: sourceIds[0] || ''
+              }
+            });
+          }
+        } catch (error) {
+          logger.warn(`Could not create aggregation host record for ${domain}:`, error);
+        }
+      }
 
       return {
         totalSources: processedSources.length,
@@ -111,8 +188,8 @@ export class AggregationService {
 
   private async fetchSourceContent(source: any): Promise<string> {
     if (source.type === 'URL' && source.url) {
-      // Try to get cached content first
-      const cachedContent = await this.fileService.getCachedContent(source.id);
+      // Try to get cached content first from database
+      const cachedContent = await this.getCachedContent(source.id);
       if (cachedContent) {
         return cachedContent;
       }
@@ -126,15 +203,141 @@ export class AggregationService {
       });
 
       const content = response.data;
-      
-      // Cache the content
-      await this.fileService.cacheSourceContent(source.id, content);
-      
+
+      // Cache the content in database
+      await this.cacheSourceContent(source.id, content);
+
       return content;
     } else if (source.type === 'FILE' && source.filePath) {
-      return await this.fileService.getCachedContent(source.id) || '';
+      return await this.getCachedContent(source.id) || '';
     } else {
       throw new Error(`Invalid source type or missing URL/filePath for source ${source.id}`);
+    }
+  }
+
+  private async getCachedContent(sourceId: string): Promise<string | null> {
+    const contentRecord = await prisma.sourceContent.findUnique({
+      where: { sourceId }
+    });
+    return contentRecord?.content || null;
+  }
+
+  private async cacheSourceContent(sourceId: string, content: string): Promise<void> {
+    const contentHash = crypto.createHash('sha256').update(content).digest('hex');
+    const lineCount = content.split('\n').length;
+
+    // Check if content has changed
+    const existing = await prisma.sourceContent.findUnique({
+      where: { sourceId }
+    });
+
+    const hasChanged = !existing || existing.contentHash !== contentHash;
+
+    await prisma.sourceContent.upsert({
+      where: { sourceId },
+      update: {
+        content,
+        contentHash,
+        lineCount,
+        entryCount: 0, // Will be updated after parsing
+        updatedAt: new Date()
+      },
+      create: {
+        sourceId,
+        content,
+        contentHash,
+        lineCount,
+        entryCount: 0
+      }
+    });
+
+    // Update the fetch log to indicate content change
+    if (hasChanged && existing) {
+      logger.info(`Content changed for source ${sourceId}`);
+    }
+  }
+
+  private async storeSourceEntries(sourceId: string, entries: ParsedEntry[]): Promise<void> {
+    // Update entry count in source content
+    await prisma.sourceContent.updateMany({
+      where: { sourceId },
+      data: { entryCount: entries.length }
+    });
+
+    // Process each entry and create host mappings
+    for (const entry of entries) {
+      const normalized = entry.domain.toLowerCase().trim();
+
+      try {
+        // Upsert host entry
+        const hostEntry = await prisma.hostEntry.upsert({
+          where: { normalized },
+          update: {
+            lastSeen: new Date(),
+            occurrenceCount: { increment: 1 }
+          },
+          create: {
+            domain: entry.domain,
+            normalized,
+            entryType: entry.type,
+            firstSeen: new Date(),
+            lastSeen: new Date(),
+            occurrenceCount: 1
+          }
+        });
+
+        // Create or update source-host mapping
+        await prisma.sourceHostMapping.upsert({
+          where: {
+            sourceId_hostEntryId: {
+              sourceId,
+              hostEntryId: hostEntry.id
+            }
+          },
+          update: {
+            lastSeen: new Date(),
+            lineNumber: entry.lineNumber,
+            rawLine: entry.comment || null
+          },
+          create: {
+            sourceId,
+            hostEntryId: hostEntry.id,
+            lineNumber: entry.lineNumber,
+            rawLine: entry.comment || null,
+            comment: entry.comment || null,
+            firstSeen: new Date(),
+            lastSeen: new Date()
+          }
+        });
+      } catch (error) {
+        // Log but don't fail - source might have been deleted
+        logger.warn(`Could not store entry for domain ${entry.domain}:`, error);
+      }
+    }
+  }
+
+  private async logSourceFetch(
+    sourceId: string,
+    status: 'SUCCESS' | 'ERROR' | 'TIMEOUT' | 'NOT_MODIFIED',
+    httpStatus: number | null,
+    errorMessage: string | null,
+    responseTimeMs: number,
+    entryCount: number
+  ): Promise<void> {
+    try {
+      await prisma.sourceFetchLog.create({
+        data: {
+          sourceId,
+          status,
+          httpStatus,
+          errorMessage,
+          responseTimeMs,
+          contentChanged: false // Will be updated if content changes
+        }
+      });
+    } catch (error) {
+      // Source might have been deleted, log but don't throw
+      logger.warn(`Could not log fetch for source ${sourceId}:`, error);
     }
   }
 
@@ -148,14 +351,14 @@ export class AggregationService {
     // First pass: collect allow rules
     for (const entry of entries) {
       if (entry.type === 'allow') {
-        allowed.add(entry.domain);
+        allowed.add(entry.domain.toLowerCase());
       }
     }
 
     // Second pass: collect block rules (excluding allowed domains)
     for (const entry of entries) {
-      if (entry.type === 'block' && !allowed.has(entry.domain)) {
-        blocked.add(entry.domain);
+      if (entry.type === 'block' && !allowed.has(entry.domain.toLowerCase())) {
+        blocked.add(entry.domain.toLowerCase());
       }
     }
 
@@ -168,7 +371,23 @@ export class AggregationService {
   async getLatestAggregation(): Promise<any | null> {
     try {
       const result = await prisma.aggregationResult.findFirst({
-        orderBy: { timestamp: 'desc' }
+        orderBy: { timestamp: 'desc' },
+        include: {
+          sources: {
+            include: {
+              source: {
+                select: {
+                  name: true
+                }
+              }
+            }
+          },
+          _count: {
+            select: {
+              hosts: true
+            }
+          }
+        }
       });
 
       return result;
@@ -190,12 +409,15 @@ export class AggregationService {
         where: { enabled: true }
       });
 
+      // Count unique host entries
+      const totalEntries = await prisma.hostEntry.count();
+
       const latestAggregation = await this.getLatestAggregation();
 
       return {
         totalSources,
         enabledSources,
-        totalEntries: latestAggregation?.uniqueEntries || 0,
+        totalEntries,
         lastAggregation: latestAggregation?.timestamp || null
       };
     } catch (error) {

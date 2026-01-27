@@ -1,19 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { AggregationService } from '../services/aggregation.service';
-import { FileService } from '../services/file.service';
+import { prisma } from '../config/database';
 import { createError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
 import servingConfig from '../config/serving';
 
 export class ServeController {
-  private aggregationService: AggregationService;
-  private fileService: FileService;
-
-  constructor() {
-    this.aggregationService = new AggregationService();
-    this.fileService = new FileService();
-  }
-
   private authenticateRequest(req: Request, res: Response): boolean {
     if (!servingConfig.requireAuthForServe) {
       return true;
@@ -28,6 +19,50 @@ export class ServeController {
     return token === servingConfig.serveAuthToken;
   }
 
+  /**
+   * Get all unique hosts from enabled sources
+   * Uses DISTINCT to ensure each host appears only once, even if in multiple enabled sources
+   */
+  private async getHostsFromEnabledSources(): Promise<string[]> {
+    const hosts = await prisma.hostEntry.findMany({
+      where: {
+        sourceMappings: {
+          some: {
+            source: {
+              enabled: true
+            }
+          }
+        }
+      },
+      select: {
+        domain: true
+      },
+      distinct: ['normalized'],
+      orderBy: {
+        domain: 'asc'
+      }
+    });
+
+    return hosts.map(h => h.domain);
+  }
+
+  /**
+   * Get count of unique hosts from enabled sources
+   */
+  private async getEnabledHostsCount(): Promise<number> {
+    return await prisma.hostEntry.count({
+      where: {
+        sourceMappings: {
+          some: {
+            source: {
+              enabled: true
+            }
+          }
+        }
+      }
+    });
+  }
+
   async serveHostsFile(req: Request, res: Response, next: NextFunction) {
     try {
       // Check authentication if required
@@ -35,17 +70,36 @@ export class ServeController {
         return next(createError('Authentication required', 401));
       }
 
-      const latestAggregation = await this.aggregationService.getLatestAggregation();
+      const hosts = await this.getHostsFromEnabledSources();
 
-      if (!latestAggregation) {
-        return next(createError('No hosts file available. Please run aggregation first.', 404));
+      // Get enabled sources count for header
+      const enabledSourcesCount = await prisma.source.count({
+        where: { enabled: true }
+      });
+
+      // Build hosts file content
+      let content: string;
+      if (hosts.length === 0) {
+        content = `# Unified Hosts File
+# Generated: ${new Date().toISOString()}
+# No sources currently enabled
+#
+# Add and enable sources to populate this file
+#
+`;
+      } else {
+        const header = `# Unified Hosts File
+# Generated: ${new Date().toISOString()}
+# Total domains: ${hosts.length}
+# Sources: ${enabledSourcesCount}
+
+`;
+        content = header + hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
       }
-
-      const fileContent = await this.fileService.readGeneratedFile(latestAggregation.filePath);
 
       // Set appropriate headers for Pi-hole/AdGuard Home
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      
+
       // Set cache control headers based on configuration
       if (servingConfig.cacheControlEnabled) {
         res.setHeader('Cache-Control', `public, max-age=${servingConfig.cacheMaxAgeSeconds}`);
@@ -55,13 +109,13 @@ export class ServeController {
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
       }
-      
-      // Add informational headers
-      res.setHeader('X-Hosts-File-Generated', latestAggregation.timestamp.toISOString());
-      res.setHeader('X-Hosts-File-Entries', latestAggregation.uniqueEntries.toString());
-      res.setHeader('X-Hosts-File-Sources', latestAggregation.totalSources.toString());
 
-      res.send(fileContent);
+      // Add informational headers
+      res.setHeader('X-Hosts-File-Generated', new Date().toISOString());
+      res.setHeader('X-Hosts-File-Entries', hosts.length.toString());
+      res.setHeader('X-Hosts-File-Sources', enabledSourcesCount.toString());
+
+      res.send(content);
     } catch (error) {
       logger.error('Failed to serve hosts file:', error);
       next(error);
@@ -70,32 +124,30 @@ export class ServeController {
 
   async serveRawHostsFile(req: Request, res: Response, next: NextFunction) {
     try {
-      const latestAggregation = await this.aggregationService.getLatestAggregation();
+      const hosts = await this.getHostsFromEnabledSources();
 
-      if (!latestAggregation) {
-        return next(createError('No hosts file available. Please run aggregation first.', 404));
+      let content: string;
+      if (hosts.length === 0) {
+        content = `# Unified Hosts File
+# Generated: ${new Date().toISOString()}
+# No sources currently enabled
+#
+# Add and enable sources to populate this file
+#
+`;
+      } else {
+        content = hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
       }
-
-      const fileContent = await this.fileService.readGeneratedFile(latestAggregation.filePath);
-
-      // Remove comments and empty lines for raw format
-      const lines = fileContent.split('\n');
-      const filteredLines = lines.filter(line => {
-        const trimmed = line.trim();
-        return trimmed.length > 0 && !trimmed.startsWith('#');
-      });
-
-      const rawContent = filteredLines.join('\n');
 
       // Set appropriate headers
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      res.setHeader('X-Hosts-File-Generated', latestAggregation.timestamp.toISOString());
-      res.setHeader('X-Hosts-File-Entries', latestAggregation.uniqueEntries.toString());
+      res.setHeader('X-Hosts-File-Generated', new Date().toISOString());
+      res.setHeader('X-Hosts-File-Entries', hosts.length.toString());
 
-      res.send(rawContent);
+      res.send(content);
     } catch (error) {
       logger.error('Failed to serve raw hosts file:', error);
       next(error);
@@ -104,32 +156,26 @@ export class ServeController {
 
   async getHostsFileInfo(req: Request, res: Response, next: NextFunction) {
     try {
-      const latestAggregation = await this.aggregationService.getLatestAggregation();
+      const hostsCount = await this.getEnabledHostsCount();
+      const enabledSourcesCount = await prisma.source.count({
+        where: { enabled: true }
+      });
 
-      if (!latestAggregation) {
-        return next(createError('No hosts file available. Please run aggregation first.', 404));
-      }
-
-      // Try to get file size
-      let fileSize = 0;
-      try {
-        const fileContent = await this.fileService.readGeneratedFile(latestAggregation.filePath);
-        fileSize = Buffer.byteLength(fileContent, 'utf8');
-      } catch (error) {
-        logger.warn('Could not read file size:', error);
-      }
+      // Calculate approximate file size (header + each line)
+      const headerSize = 150; // Approximate header size
+      const avgLineSize = 25; // "0.0.0.0 " + domain + newline
+      const estimatedSize = hostsCount === 0
+        ? headerSize + 100 // Empty file with comments
+        : headerSize + (hostsCount * avgLineSize);
 
       res.json({
         status: 'success',
         data: {
-          id: latestAggregation.id,
-          filename: latestAggregation.filePath.split('/').pop() || 'unified-hosts.txt',
-          filePath: latestAggregation.filePath,
-          size: fileSize,
-          entries: latestAggregation.uniqueEntries,
-          totalSources: latestAggregation.totalSources,
-          generatedAt: latestAggregation.timestamp.toISOString(),
-          sourcesUsed: latestAggregation.sourcesUsed ? JSON.parse(latestAggregation.sourcesUsed) : [],
+          filename: 'unified-hosts.txt',
+          size: estimatedSize,
+          entries: hostsCount,
+          totalSources: enabledSourcesCount,
+          generatedAt: new Date().toISOString(),
           downloadUrl: `${req.protocol}://${req.get('host')}/api/serve/hosts`,
           rawDownloadUrl: `${req.protocol}://${req.get('host')}/api/serve/hosts/raw`
         }
@@ -142,19 +188,19 @@ export class ServeController {
 
   async healthCheck(req: Request, res: Response, next: NextFunction) {
     try {
-      const latestAggregation = await this.aggregationService.getLatestAggregation();
-      const hasHostsFile = !!latestAggregation;
+      const hostsCount = await this.getEnabledHostsCount();
+      const hasHostsFile = hostsCount > 0;
 
       res.json({
         status: 'success',
         data: {
           healthy: true,
           hasHostsFile,
-          lastGenerated: latestAggregation?.timestamp.toISOString() || null,
-          totalEntries: latestAggregation?.uniqueEntries || 0,
-          message: hasHostsFile 
-            ? 'Hosts file is available for serving' 
-            : 'No hosts file available. Run aggregation first.'
+          lastGenerated: new Date().toISOString(),
+          totalEntries: hostsCount,
+          message: hasHostsFile
+            ? 'Hosts file is available for serving'
+            : 'No hosts available. Add and enable sources first.'
         }
       });
     } catch (error) {

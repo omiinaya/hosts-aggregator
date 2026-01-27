@@ -3,30 +3,56 @@ import { prisma } from '../config/database';
 import { createError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
 import { AutoAggregationService } from '../services/auto-aggregation.service';
-import { FileService } from '../services/file.service';
 import { AggregationService } from '../services/aggregation.service';
 
 export class SourcesController {
   private autoAggregationService: AutoAggregationService;
-  private fileService: FileService;
   private aggregationService: AggregationService;
 
   constructor() {
     this.autoAggregationService = new AutoAggregationService();
-    this.fileService = new FileService();
     this.aggregationService = new AggregationService();
   }
+
   async getAllSources(req: Request, res: Response, next: NextFunction) {
     try {
       const sources = await prisma.source.findMany({
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        include: {
+          _count: {
+            select: {
+              hostMappings: true
+            }
+          },
+          contentCache: {
+            select: {
+              fetchedAt: true,
+              entryCount: true
+            }
+          },
+          fetchLogs: {
+            orderBy: { fetchedAt: 'desc' },
+            take: 1,
+            select: {
+              status: true,
+              fetchedAt: true
+            }
+          }
+        }
       });
 
       res.json({
         status: 'success',
         data: sources.map(source => ({
           ...source,
-          metadata: source.metadata ? JSON.parse(source.metadata) : null
+          metadata: source.metadata ? JSON.parse(source.metadata) : null,
+          hostCount: source._count.hostMappings,
+          lastFetched: source.contentCache?.fetchedAt || null,
+          lastFetchStatus: source.fetchLogs[0]?.status || null,
+          entryCount: source.contentCache?.entryCount || 0,
+          _count: undefined,
+          contentCache: undefined,
+          fetchLogs: undefined
         }))
       });
     } catch (error) {
@@ -40,7 +66,45 @@ export class SourcesController {
       const { id } = req.params;
 
       const source = await prisma.source.findUnique({
-        where: { id }
+        where: { id },
+        include: {
+          _count: {
+            select: {
+              hostMappings: true
+            }
+          },
+          contentCache: {
+            select: {
+              fetchedAt: true,
+              entryCount: true,
+              lineCount: true,
+              contentHash: true
+            }
+          },
+          fetchLogs: {
+            orderBy: { fetchedAt: 'desc' },
+            take: 5,
+            select: {
+              status: true,
+              httpStatus: true,
+              errorMessage: true,
+              responseTimeMs: true,
+              contentChanged: true,
+              fetchedAt: true
+            }
+          },
+          hostMappings: {
+            include: {
+              hostEntry: {
+                select: {
+                  domain: true,
+                  entryType: true
+                }
+              }
+            },
+            take: 100
+          }
+        }
       });
 
       if (!source) {
@@ -51,7 +115,12 @@ export class SourcesController {
         status: 'success',
         data: {
           ...source,
-          metadata: source.metadata ? JSON.parse(source.metadata) : null
+          metadata: source.metadata ? JSON.parse(source.metadata) : null,
+          hostCount: source._count.hostMappings,
+          lastFetched: source.contentCache?.fetchedAt || null,
+          lastFetchStatus: source.fetchLogs[0]?.status || null,
+          entryCount: source.contentCache?.entryCount || 0,
+          _count: undefined
         }
       });
     } catch (error) {
@@ -135,10 +204,12 @@ export class SourcesController {
         }
       }
 
-      // Clear cache if URL is being updated
+      // Clear content cache if URL is being updated
       const urlChanged = url !== undefined && url !== existingSource.url;
       if (urlChanged) {
-        await this.fileService.deleteCachedContent(id);
+        await prisma.sourceContent.deleteMany({
+          where: { sourceId: id }
+        });
       }
 
       const updateData: any = {};
@@ -157,7 +228,7 @@ export class SourcesController {
         (enabled !== undefined && enabled) ||
         (enabled === undefined && existingSource.enabled) ||
         urlChanged;
-      
+
       if (shouldTriggerAggregation) {
         try {
           await this.aggregationService.aggregateSources();
@@ -196,9 +267,7 @@ export class SourcesController {
         return next(createError('Source not found', 404));
       }
 
-      // Delete cached content BEFORE removing from database
-      await this.fileService.deleteCachedContent(id);
-
+      // Cascade delete will handle related records (contentCache, hostMappings, fetchLogs)
       await prisma.source.delete({
         where: { id }
       });
@@ -280,17 +349,18 @@ export class SourcesController {
         return next(createError('Source not found', 404));
       }
 
-      // Update last checked timestamp
-      await prisma.source.update({
-        where: { id },
-        data: {
-          lastChecked: new Date()
-        }
-      });
+      // Trigger aggregation for this specific source
+      try {
+        await this.aggregationService.aggregateSources();
+        logger.info(`Source ${id} refresh completed`);
+      } catch (error) {
+        logger.error(`Failed to refresh source ${id}:`, error);
+        return next(createError('Failed to refresh source', 500));
+      }
 
       res.json({
         status: 'success',
-        message: 'Source refresh initiated'
+        message: 'Source refresh completed'
       });
     } catch (error) {
       logger.error(`Failed to refresh source ${req.params.id}:`, error);
@@ -310,8 +380,10 @@ export class SourcesController {
         return next(createError('Source not found', 404));
       }
 
-      // Delete existing cache file
-      await this.fileService.deleteCachedContent(id);
+      // Delete existing content cache
+      await prisma.sourceContent.deleteMany({
+        where: { sourceId: id }
+      });
 
       // Trigger immediate aggregation to re-fetch content
       try {
@@ -342,9 +414,11 @@ export class SourcesController {
         where: { enabled: true }
       });
 
-      // Delete cache for all enabled sources
+      // Delete content cache for all enabled sources
       for (const source of sources) {
-        await this.fileService.deleteCachedContent(source.id);
+        await prisma.sourceContent.deleteMany({
+          where: { sourceId: source.id }
+        });
       }
 
       // Trigger immediate aggregation to re-fetch all content

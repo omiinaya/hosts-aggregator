@@ -1,0 +1,32 @@
+# Unified Hosts File
+# Generated: 2026-01-27T17:51:00.971Z
+# Total domains: 26
+# Sources: 1
+# Source list: Hagezi Pro
+
+0.0.0.0 1
+0.0.0.0 170439
+0.0.0.0 2026
+0.0.0.0 2026.0127.1010.35
+0.0.0.0 27
+0.0.0.0 AdBlock
+0.0.0.0 Big
+0.0.0.0 Blocklist
+0.0.0.0 Blocks
+0.0.0.0 Cleans
+0.0.0.0 Crytojacking
+0.0.0.0 DNS
+0.0.0.0 Internet
+0.0.0.0 Jan
+0.0.0.0 Last
+0.0.0.0 Number
+0.0.0.0 Pro
+0.0.0.0 UTC
+0.0.0.0 and
+0.0.0.0 broom
+0.0.0.0 day
+0.0.0.0 of
+0.0.0.0 other
+0.0.0.0 protects
+0.0.0.0 the
+0.0.0.0 your

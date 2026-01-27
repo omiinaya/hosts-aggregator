@@ -54,7 +54,7 @@ export const useCreateSource = () => {
 // Update a source
 export const useUpdateSource = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: async ({ id, ...updates }: UpdateSourceRequest & { id: string }): Promise<Source> => {
       const response = await fetch(`${API_BASE_URL}/sources/${id}`, {
@@ -64,21 +64,47 @@ export const useUpdateSource = () => {
         },
         body: JSON.stringify(updates),
       })
-      
+
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.message || 'Failed to update source')
       }
-      
+
       const data = await response.json()
       return data.data
     },
+    onMutate: async ({ id, ...updates }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['sources'] })
+
+      // Snapshot the previous value
+      const previousSources = queryClient.getQueryData<Source[]>(['sources'])
+
+      // Optimistically update to the new value
+      if (previousSources) {
+        queryClient.setQueryData<Source[]>(['sources'], old => {
+          if (!old) return old
+          return old.map(source =>
+            source.id === id ? { ...source, ...updates } : source
+          )
+        })
+      }
+
+      return { previousSources }
+    },
+    onError: (error: Error, variables, context) => {
+      // If the mutation fails, use the context to roll back
+      if (context?.previousSources) {
+        queryClient.setQueryData(['sources'], context.previousSources)
+      }
+      toast.error(error.message)
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources'] })
       toast.success('Source updated successfully')
     },
-    onError: (error: Error) => {
-      toast.error(error.message)
+    onSettled: () => {
+      // Always refetch after error or success to ensure cache is in sync with server
+      queryClient.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 }

@@ -37,10 +37,7 @@ export class AggregateController {
 
       res.json({
         status: 'success',
-        data: {
-          ...latestAggregation,
-          sourcesUsed: latestAggregation.sourcesUsed ? JSON.parse(latestAggregation.sourcesUsed) : []
-        }
+        data: latestAggregation
       });
     } catch (error) {
       logger.error('Failed to get aggregated data:', error);
@@ -90,15 +87,12 @@ export class AggregateController {
 
   async getAggregationHistory(req: Request, res: Response, next: NextFunction) {
     try {
-      // For now, return latest aggregation
+      // Return latest aggregation with source details
       const latestAggregation = await this.aggregationService.getLatestAggregation();
 
       res.json({
         status: 'success',
-        data: latestAggregation ? [{
-          ...latestAggregation,
-          sourcesUsed: latestAggregation.sourcesUsed ? JSON.parse(latestAggregation.sourcesUsed) : []
-        }] : []
+        data: latestAggregation ? [latestAggregation] : []
       });
     } catch (error) {
       logger.error('Failed to get aggregation history:', error);
@@ -125,7 +119,7 @@ export class AggregateController {
       // For now, return a simple status
       // In a real implementation, this would check if aggregation is running
       const latestAggregation = await this.aggregationService.getLatestAggregation();
-      
+
       res.json({
         status: 'success',
         data: {
@@ -154,9 +148,9 @@ export class AggregateController {
         data: {
           id: latestAggregation.id,
           filename: latestAggregation.filePath.split('/').pop() || 'unified-hosts.txt',
-          size: 0, // Would need to get actual file size
+          size: latestAggregation.fileSizeBytes || 0,
           createdAt: latestAggregation.timestamp.toISOString(),
-          totalEntries: 0 // Would need to parse file
+          totalEntries: latestAggregation.uniqueEntries
         }
       });
     } catch (error) {
