@@ -103,6 +103,8 @@ All error responses follow the same format:
 
 **Response:** Updated source object
 
+**Cache Behavior:** When updating the URL field, the existing cache for the source is automatically cleared to ensure fresh content is fetched.
+
 ### Delete Source
 
 **Endpoint:** `DELETE /api/sources/:id`
@@ -129,6 +131,37 @@ All error responses follow the same format:
 - `id` (path parameter) - Source ID
 
 **Response:** Updated source object with refreshed data
+
+### Refresh Source Cache
+
+**Endpoint:** `POST /api/sources/:id/refresh-cache`
+
+**Parameters:**
+- `id` (path parameter) - Source ID
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Cache refreshed successfully"
+}
+```
+
+**Description:** Clears the cached content for a specific source and triggers re-fetching from the source URL.
+
+### Refresh All Source Cache
+
+**Endpoint:** `POST /api/sources/refresh-cache`
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Cache refreshed for X sources"
+}
+```
+
+**Description:** Clears cached content for all enabled sources and triggers re-fetching from their respective URLs.
 
 ## Aggregation Endpoints
 

@@ -26,4 +26,10 @@ router.patch('/:id/toggle', validateIdParam, sourcesController.toggleSource.bind
 // POST /api/sources/:id/refresh - Refresh source
 router.post('/:id/refresh', validateIdParam, sourcesController.refreshSource.bind(sourcesController));
 
+// POST /api/sources/:id/refresh-cache - Refresh cache for specific source
+router.post('/:id/refresh-cache', validateIdParam, sourcesController.refreshCache.bind(sourcesController));
+
+// POST /api/sources/refresh-cache - Refresh cache for all sources
+router.post('/refresh-cache', sourcesController.refreshAllCache.bind(sourcesController));
+
 export { router as sourcesRouter };
