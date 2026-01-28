@@ -200,26 +200,12 @@ All error responses follow the same format:
     "totalEntries": 68675,
     "uniqueEntries": 68566,
     "duplicatesRemoved": 109,
-    "filePath": "/path/to/unified-hosts.txt",
     "sourcesUsed": ["source-id"],
     "createdAt": "2026-01-21T17:43:43.713Z",
     "updatedAt": "2026-01-21T17:43:43.713Z"
   }
 }
 ```
-
-### Download Unified Hosts File
-
-**Endpoint:** `GET /api/aggregated/download/:id`
-
-**Parameters:**
-- `id` (path parameter) - Aggregation ID
-
-**Response:** Hosts file content as text/plain
-
-**Headers:**
-- `Content-Type: text/plain`
-- `Content-Disposition: attachment; filename="unified-hosts-{timestamp}.txt"`
 
 ### Get Aggregation Statistics
 
@@ -259,34 +245,13 @@ All error responses follow the same format:
       "totalSources": 1,
       "totalEntries": 68675,
       "uniqueEntries": 68566,
-      "duplicatesRemoved": 109,
-      "filePath": "/path/to/unified-hosts.txt"
+      "duplicatesRemoved": 109
     }
   ],
   "pagination": {
     "total": 5,
     "limit": 10,
     "offset": 0
-  }
-}
-```
-
-### Clean Up Old Files
-
-**Endpoint:** `POST /api/aggregated/cleanup`
-
-**Query Parameters:**
-- `keepLast` - Number of recent files to keep (default: 5)
-- `olderThanDays` - Delete files older than X days (default: 30)
-
-**Response:**
-```json
-{
-  "status": "success",
-  "data": {
-    "filesDeleted": 3,
-    "spaceFreed": "15.2 MB",
-    "filesKept": 5
   }
 }
 ```
@@ -360,11 +325,19 @@ curl -X POST http://localhost:3001/api/sources \
 curl -X POST http://localhost:3001/api/aggregated
 ```
 
-### Downloading Unified Hosts File
+### Serving Hosts File
+
+The hosts file is served dynamically from the database. Use the serve endpoints:
 
 ```bash
-curl -o unified-hosts.txt http://localhost:3001/api/aggregated/download/latest
+# Get hosts file with headers
+curl http://localhost:3001/api/serve/hosts
+
+# Get raw hosts file (no headers)
+curl http://localhost:3001/api/serve/hosts/raw
 ```
+
+See [SERVING.md](SERVING.md) for more details on serving configuration.
 
 ## Error Codes
 

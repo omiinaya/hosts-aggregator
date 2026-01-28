@@ -4,7 +4,7 @@ This document explains how to serve the aggregated hosts file for Pi-hole, AdGua
 
 ## Overview
 
-The hosts aggregator now provides HTTP endpoints to serve the unified hosts file in real-time. When you add, update, or remove sources, the aggregated file automatically updates within seconds.
+The hosts aggregator provides HTTP endpoints to serve the unified hosts file dynamically from the database. All hosts file content is generated on-demand from the database without creating any text files. When you add, update, or remove sources, the aggregated data is automatically updated and available immediately.
 
 ## Available Endpoints
 

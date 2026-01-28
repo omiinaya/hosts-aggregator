@@ -86,7 +86,6 @@ UI Update ← Components ← Hooks ← Response Handling
 - `totalEntries` - Total entries processed
 - `uniqueEntries` - Unique entries after deduplication
 - `duplicatesRemoved` - Number of duplicates removed
-- `filePath` - Generated file path
 - `sourcesUsed` - Array of source IDs used
 - `blockedDomains` - Array of blocked domains
 - `allowedDomains` - Array of allowed domains
@@ -139,10 +138,14 @@ frontend/
 ### Aggregation
 - `POST /api/aggregated` - Trigger aggregation
 - `GET /api/aggregated` - Get latest aggregation
-- `GET /api/aggregated/download/:id` - Download hosts file
 - `GET /api/aggregated/stats` - Get aggregation statistics
 - `GET /api/aggregated/history` - Get aggregation history
-- `POST /api/aggregated/cleanup` - Clean up old files
+
+### Serving
+- `GET /api/serve/hosts` - Serve hosts file with headers
+- `GET /api/serve/hosts/raw` - Serve raw hosts file
+- `GET /api/serve/hosts/info` - Get hosts file metadata
+- `GET /api/serve/health` - Health check endpoint
 
 ## Security Considerations
 
@@ -156,7 +159,7 @@ frontend/
 
 - **Caching** - Source data caching to reduce API calls
 - **Deduplication** - Efficient duplicate removal algorithm
-- **Stream Processing** - Memory-efficient file processing
+- **Dynamic Serving** - All hosts file content served dynamically from database
 - **Database Indexing** - Optimized query performance
 - **Compression** - Response compression for large files
 
