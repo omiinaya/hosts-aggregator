@@ -211,11 +211,6 @@ model AggregationResult {
   processingTimeMs Int // How long aggregation took
   triggeredBy String   @default("manual") // 'manual' | 'scheduled' | 'auto' | 'webhook'
   
-  // Output
-  filePath    String   // Path to generated hosts file
-  fileSizeBytes Int?   // Size of generated file
-  fileHash    String?  // Hash of generated file for integrity
-  
   // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

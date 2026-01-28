@@ -19,13 +19,4 @@ router.get('/history', aggregateController.getAggregationHistory.bind(aggregateC
 // GET /api/aggregate/status - Get aggregation status
 router.get('/status', aggregateController.getAggregationStatus.bind(aggregateController));
 
-// GET /api/aggregate/latest-file - Get latest hosts file info
-router.get('/latest-file', aggregateController.getLatestHostsFile.bind(aggregateController));
-
-// GET /api/aggregate/download/:id - Download aggregated file
-router.get('/download/:id', aggregateController.downloadAggregated.bind(aggregateController));
-
-// POST /api/aggregate/cleanup - Clean up old files
-router.post('/cleanup', aggregateController.cleanup.bind(aggregateController));
-
 export { router as aggregateRouter };

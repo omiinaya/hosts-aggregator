@@ -1,18 +1,14 @@
 import axios from 'axios';
-import crypto from 'crypto';
 import { HostsParser } from './parser.service';
-import { FileService } from './file.service';
 import { prisma } from '../config/database';
 import { AggregationStats, ParsedEntry } from '../types';
 import { logger } from '../utils/logger';
 
 export class AggregationService {
   private parser: HostsParser;
-  private fileService: FileService;
 
   constructor() {
     this.parser = new HostsParser();
-    this.fileService = new FileService();
   }
 
   async aggregateSources(): Promise<AggregationStats> {
@@ -88,17 +84,6 @@ export class AggregationService {
       // Process entries to remove duplicates and apply allow rules
       const result = this.processEntries(allEntries);
 
-      // Generate unified hosts file with actual source count
-      const filePath = await this.fileService.generateUnifiedHostsFile(
-        result.blockedDomains,
-        processedSources.length,
-        sources.map(s => s.name)
-      );
-
-      // Get file size
-      const fileStats = await this.fileService.getFileStats(filePath);
-      const fileHash = crypto.createHash('sha256').update(result.blockedDomains.join('\n')).digest('hex');
-
       // Save aggregation result with detailed statistics
       const aggregationResult = await prisma.aggregationResult.create({
         data: {
@@ -111,10 +96,7 @@ export class AggregationService {
           allowEntries: result.allowedDomains.length,
           blockEntries: result.blockedDomains.length,
           processingTimeMs: Date.now() - startTime,
-          triggeredBy: 'manual',
-          filePath,
-          fileSizeBytes: fileStats?.size || null,
-          fileHash
+          triggeredBy: 'manual'
         }
       });
 
