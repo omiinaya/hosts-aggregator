@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Dashboard from './Dashboard'
 import Sources from './Sources'
+import Hosts from './Hosts'
 import Settings from './Settings'
 import NotFound from './NotFound'
 
@@ -10,6 +11,7 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/sources" element={<Sources />} />
+      <Route path="/hosts" element={<Hosts />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

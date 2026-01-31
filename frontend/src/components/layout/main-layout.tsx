@@ -8,6 +8,7 @@ import {
   Download,
   Settings,
   FileText,
+  List,
 } from 'lucide-react'
 
 interface MainLayoutProps {
@@ -17,6 +18,7 @@ interface MainLayoutProps {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Sources', href: '/sources', icon: Database },
+  { name: 'Hosts', href: '/hosts', icon: List },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

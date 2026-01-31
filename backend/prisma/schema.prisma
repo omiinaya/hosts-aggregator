@@ -70,6 +70,7 @@ model HostEntry {
   domain      String   @unique // The actual domain (e.g., "ads.example.com")
   normalized  String   @unique // Lowercase, trimmed version for deduplication
   entryType   String   @default("block") // 'block' | 'allow' | 'element'
+  enabled     Boolean  @default(true) // Whether this host entry is enabled/disabled
   firstSeen   DateTime @default(now())
   lastSeen    DateTime @updatedAt
   occurrenceCount Int @default(1) // How many times this domain has been seen
@@ -85,6 +86,7 @@ model HostEntry {
   @@index([domain])
   @@index([normalized])
   @@index([entryType])
+  @@index([enabled])
   @@index([lastSeen])
 }
 

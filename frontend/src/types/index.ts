@@ -42,3 +42,73 @@ export interface UpdateSourceRequest {
   url?: string
   enabled?: boolean
 }
+
+export interface HostEntry {
+  id: string
+  domain: string
+  normalized: string
+  entryType: 'block' | 'allow' | 'element'
+  enabled: boolean
+  occurrenceCount: number
+  firstSeen: string
+  lastSeen: string
+  sources: HostSource[]
+}
+
+export interface HostSource {
+  id: string
+  name: string
+  type: string
+  enabled: boolean
+  lineNumber?: number
+  rawLine?: string
+  comment?: string
+}
+
+export interface HostListResponse {
+  hosts: HostEntry[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
+export interface HostStats {
+  total: number
+  enabled: number
+  disabled: number
+  byEntryType: {
+    block: number
+    allow: number
+    element: number
+  }
+  bySource: Array<{
+    sourceId: string
+    sourceName: string
+    hostCount: number
+  }>
+}
+
+export interface HostListParams {
+  page?: number
+  limit?: number
+  enabled?: boolean
+  entryType?: 'block' | 'allow' | 'element'
+  search?: string
+  sourceId?: string
+}
+
+export interface BulkUpdateHostsRequest {
+  hostIds: string[]
+  enabled: boolean
+}
+
+export interface BulkToggleHostsRequest {
+  hostIds: string[]
+}
+
+export interface UpdateHostRequest {
+  enabled?: boolean
+}

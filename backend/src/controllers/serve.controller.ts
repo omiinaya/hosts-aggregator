@@ -33,13 +33,20 @@ export class ServeController {
   private async getHostsFromEnabledSources(): Promise<string[]> {
     const hosts = await prisma.hostEntry.findMany({
       where: {
-        sourceMappings: {
-          some: {
-            source: {
-              enabled: true
+        AND: [
+          {
+            sourceMappings: {
+              some: {
+                source: {
+                  enabled: true
+                }
+              }
             }
+          },
+          {
+            enabled: true
           }
-        }
+        ]
       },
       select: {
         domain: true
@@ -59,13 +66,20 @@ export class ServeController {
   private async getEnabledHostsCount(): Promise<number> {
     return await prisma.hostEntry.count({
       where: {
-        sourceMappings: {
-          some: {
-            source: {
-              enabled: true
+        AND: [
+          {
+            sourceMappings: {
+              some: {
+                source: {
+                  enabled: true
+                }
+              }
             }
+          },
+          {
+            enabled: true
           }
-        }
+        ]
       }
     });
   }
@@ -245,13 +259,20 @@ export class ServeController {
   private async getHostEntriesFromEnabledSources(): Promise<Array<{ domain: string; entryType: string }>> {
     const hosts = await prisma.hostEntry.findMany({
       where: {
-        sourceMappings: {
-          some: {
-            source: {
-              enabled: true
+        AND: [
+          {
+            sourceMappings: {
+              some: {
+                source: {
+                  enabled: true
+                }
+              }
             }
+          },
+          {
+            enabled: true
           }
-        }
+        ]
       },
       select: {
         domain: true,
