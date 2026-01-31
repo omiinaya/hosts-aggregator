@@ -68,9 +68,12 @@ export class HostsParser {
     return entries;
   }
   
-  parseContent(content: string, sourceId: string, format: 'standard' | 'adblock' = 'standard'): ParsedEntry[] {
+  parseContent(content: string, sourceId: string, format: 'standard' | 'adblock' | 'auto' = 'standard'): ParsedEntry[] {
     try {
-      if (format === 'adblock') {
+      // Handle 'auto' format by defaulting to 'standard' (no manual override)
+      const effectiveFormat = format === 'auto' ? 'standard' : format;
+      
+      if (effectiveFormat === 'adblock') {
         return this.parseAdblock(content, sourceId);
       } else {
         return this.parseStandardHosts(content, sourceId);
