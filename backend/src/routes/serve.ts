@@ -13,6 +13,12 @@ router.get('/hosts/raw', serveController.serveRawHostsFile.bind(serveController)
 // GET /api/serve/hosts/info - Get hosts file information
 router.get('/hosts/info', serveController.getHostsFileInfo.bind(serveController));
 
+// GET /api/serve/abp - Serve unified hosts file in ABP format
+router.get('/abp', serveController.serveABP.bind(serveController));
+
+// GET /api/serve/abp/raw - Serve raw hosts file in ABP format without headers
+router.get('/abp/raw', serveController.serveABPRaw.bind(serveController));
+
 // GET /api/serve/health - Health check for serving endpoint
 router.get('/health', serveController.healthCheck.bind(serveController));
 

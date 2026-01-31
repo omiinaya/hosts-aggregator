@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import { HostsParser } from './parser.service';
 import { prisma } from '../config/database';
 import { AggregationStats, ParsedEntry } from '../types';
@@ -52,7 +53,17 @@ export class AggregationService {
           }
 
           const content = await this.fetchSourceContent(source);
-          const entries = this.parser.parseContent(content, source.id, 'standard');
+          
+          // Detect format with confidence scoring and manual override support
+          const formatDetection = this.detectFormat(
+            content,
+            source.format as 'standard' | 'adblock' | 'auto' | undefined
+          );
+          
+          // Store the detected format in SourceContent
+          await this.storeDetectedFormat(source.id, formatDetection);
+          
+          const entries = this.parser.parseContent(content, source.id, formatDetection.format);
 
           // Store entries in database with host relationships
           await this.storeSourceEntries(source.id, entries);
@@ -197,6 +208,120 @@ export class AggregationService {
     }
   }
 
+  /**
+   * Detects the format of hosts file content with confidence scoring.
+   * 
+   * @param content - The content to analyze
+   * @param manualFormat - Optional manual format override ('standard', 'adblock', or 'auto')
+   * @param confidenceThreshold - Minimum confidence threshold (0-100) to auto-detect format
+   * @returns Object containing detected format, confidence score, and whether manual override was used
+   */
+  private detectFormat(
+    content: string,
+    manualFormat?: 'standard' | 'adblock' | 'auto',
+    confidenceThreshold: number = 60
+  ): {
+    format: 'standard' | 'adblock' | 'auto';
+    confidence: number;
+    manualOverride: boolean;
+    detectedFormat: 'standard' | 'adblock' | 'auto';
+  } {
+    const lines = content.split('\n').slice(0, 100); // Check first 100 lines
+    
+    let adblockPatternCount = 0;
+    let standardPatternCount = 0;
+    let totalPatternLines = 0;
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Skip empty lines and comments
+      if (!trimmedLine || trimmedLine.startsWith('#')) {
+        continue;
+      }
+      
+      // Check for AdBlock patterns: ||domain^
+      if (trimmedLine.match(/\|\|[^\/\s]+\^/)) {
+        adblockPatternCount++;
+        totalPatternLines++;
+      }
+      
+      // Check for standard hosts patterns: 0.0.0.0 domain or 127.0.0.1 domain
+      if (trimmedLine.match(/^(0\.0\.0\.0|127\.0\.0\.1)\s+/)) {
+        standardPatternCount++;
+        totalPatternLines++;
+      }
+    }
+    
+    // Calculate confidence scores
+    let adblockConfidence = 0;
+    let standardConfidence = 0;
+    
+    if (totalPatternLines > 0) {
+      adblockConfidence = (adblockPatternCount / totalPatternLines) * 100;
+      standardConfidence = (standardPatternCount / totalPatternLines) * 100;
+    }
+    
+    // Determine detected format based on confidence
+    let detectedFormat: 'standard' | 'adblock' | 'auto' = 'auto';
+    let confidence = 0;
+    
+    if (adblockConfidence > standardConfidence) {
+      detectedFormat = 'adblock';
+      confidence = adblockConfidence;
+    } else if (standardConfidence > adblockConfidence) {
+      detectedFormat = 'standard';
+      confidence = standardConfidence;
+    } else {
+      detectedFormat = 'auto';
+      confidence = 0;
+    }
+    
+    // Check for mixed content (both formats present with similar percentages)
+    const mixedContentThreshold = 10; // Both formats present with at least 10%
+    if (adblockPatternCount > 0 && standardPatternCount > 0) {
+      const difference = Math.abs(adblockConfidence - standardConfidence);
+      if (difference < mixedContentThreshold) {
+        logger.warn(
+          `Mixed content detected: ${adblockPatternCount} AdBlock patterns, ${standardPatternCount} standard patterns. ` +
+          `Confidence: AdBlock ${adblockConfidence.toFixed(1)}%, Standard ${standardConfidence.toFixed(1)}%`
+        );
+      }
+    }
+    
+    // Apply manual format override if provided and not 'auto'
+    if (manualFormat && manualFormat !== 'auto') {
+      logger.info(`Using manual format override: ${manualFormat} (detected: ${detectedFormat}, confidence: ${confidence.toFixed(1)}%)`);
+      return {
+        format: manualFormat,
+        confidence,
+        manualOverride: true,
+        detectedFormat
+      };
+    }
+    
+    // Use auto-detection if confidence is below threshold
+    if (confidence < confidenceThreshold) {
+      logger.info(
+        `Low confidence detection (${confidence.toFixed(1)}% < ${confidenceThreshold}%), using 'auto' format. ` +
+        `Detected: ${detectedFormat}`
+      );
+      return {
+        format: 'auto',
+        confidence,
+        manualOverride: false,
+        detectedFormat
+      };
+    }
+    
+    return {
+      format: detectedFormat,
+      confidence,
+      manualOverride: false,
+      detectedFormat
+    };
+  }
+
   private async getCachedContent(sourceId: string): Promise<string | null> {
     const contentRecord = await prisma.sourceContent.findUnique({
       where: { sourceId }
@@ -236,6 +361,43 @@ export class AggregationService {
     // Update the fetch log to indicate content change
     if (hasChanged && existing) {
       logger.info(`Content changed for source ${sourceId}`);
+    }
+  }
+
+  /**
+   * Stores the detected format information in the SourceContent table.
+   * 
+   * @param sourceId - The source ID
+   * @param formatDetection - The format detection result
+   */
+  private async storeDetectedFormat(
+    sourceId: string,
+    formatDetection: {
+      format: 'standard' | 'adblock' | 'auto';
+      confidence: number;
+      manualOverride: boolean;
+      detectedFormat: 'standard' | 'adblock' | 'auto';
+    }
+  ): Promise<void> {
+    try {
+      await prisma.sourceContent.update({
+        where: { sourceId },
+        data: {
+          format: formatDetection.format
+        }
+      });
+
+      // Log format detection details
+      logger.info(
+        `Format detection for source ${sourceId}: ` +
+        `format=${formatDetection.format}, ` +
+        `confidence=${formatDetection.confidence.toFixed(1)}%, ` +
+        `manualOverride=${formatDetection.manualOverride}, ` +
+        `detected=${formatDetection.detectedFormat}`
+      );
+    } catch (error) {
+      // Log but don't fail - content might not exist yet
+      logger.warn(`Could not store detected format for source ${sourceId}:`, error);
     }
   }
 

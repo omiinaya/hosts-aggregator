@@ -4,14 +4,17 @@ import { createError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
 import { AutoAggregationService } from '../services/auto-aggregation.service';
 import { AggregationService } from '../services/aggregation.service';
+import { HostsParser } from '../services/parser.service';
 
 export class SourcesController {
   private autoAggregationService: AutoAggregationService;
   private aggregationService: AggregationService;
+  private parser: HostsParser;
 
   constructor() {
     this.autoAggregationService = new AutoAggregationService();
     this.aggregationService = new AggregationService();
+    this.parser = new HostsParser();
   }
 
   async getAllSources(req: Request, res: Response, next: NextFunction) {
@@ -131,7 +134,7 @@ export class SourcesController {
 
   async createSource(req: Request, res: Response, next: NextFunction) {
     try {
-      const { name, url, enabled = true, metadata } = req.body;
+      const { name, url, enabled = true, metadata, format } = req.body;
 
       // Check if source with same name already exists
       const existingSource = await prisma.source.findUnique({
@@ -149,6 +152,7 @@ export class SourcesController {
           filePath: null,
           type: 'URL',
           enabled,
+          format: format || 'auto',
           metadata: metadata ? JSON.stringify(metadata) : null
         }
       });
@@ -183,7 +187,7 @@ export class SourcesController {
   async updateSource(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      const { name, url, enabled, metadata } = req.body;
+      const { name, url, enabled, metadata, format } = req.body;
 
       const existingSource = await prisma.source.findUnique({
         where: { id }
@@ -217,6 +221,7 @@ export class SourcesController {
       if (url !== undefined) updateData.url = url;
       if (enabled !== undefined) updateData.enabled = enabled;
       if (metadata !== undefined) updateData.metadata = JSON.stringify(metadata);
+      if (format !== undefined) updateData.format = format;
 
       const source = await prisma.source.update({
         where: { id },
@@ -439,6 +444,131 @@ export class SourcesController {
       });
     } catch (error) {
       logger.error('Failed to refresh all cache:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Detect the format of a source's content
+   * GET /api/sources/:id/detect-format
+   * 
+   * This endpoint analyzes the source's cached content and returns
+   * the detected format with confidence score and metadata.
+   */
+  async detectFormat(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+
+      // Fetch the source by ID
+      const source = await prisma.source.findUnique({
+        where: { id },
+        include: {
+          contentCache: true
+        }
+      });
+
+      if (!source) {
+        return next(createError('Source not found', 404));
+      }
+
+      // Check if source has cached content
+      if (!source.contentCache || !source.contentCache.content) {
+        return next(createError('Source has no cached content. Please refresh the source first.', 400));
+      }
+
+      const content = source.contentCache.content;
+
+      // Perform format detection
+      const lines = content.split('\n').slice(0, 100); // Check first 100 lines
+      
+      let adblockPatternCount = 0;
+      let standardPatternCount = 0;
+      let totalPatternLines = 0;
+      let elementHidingCount = 0;
+      let allowRuleCount = 0;
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Skip empty lines and comments
+        if (!trimmedLine || trimmedLine.startsWith('#') || trimmedLine.startsWith('!')) {
+          continue;
+        }
+        
+        // Check for AdBlock patterns: ||domain^
+        if (trimmedLine.match(/\|\|[^\/\s]+\^/)) {
+          adblockPatternCount++;
+          totalPatternLines++;
+          
+          // Check for allow rules (@@||domain^)
+          if (trimmedLine.startsWith('@@')) {
+            allowRuleCount++;
+          }
+        }
+        
+        // Check for element hiding rules (domain.com##selector)
+        if (trimmedLine.includes('##')) {
+          elementHidingCount++;
+          totalPatternLines++;
+        }
+        
+        // Check for standard hosts patterns: 0.0.0.0 domain or 127.0.0.1 domain
+        if (trimmedLine.match(/^(0\.0\.0\.0|127\.0\.0\.1)\s+/)) {
+          standardPatternCount++;
+          totalPatternLines++;
+        }
+      }
+      
+      // Calculate confidence scores
+      let adblockConfidence = 0;
+      let standardConfidence = 0;
+      
+      if (totalPatternLines > 0) {
+        adblockConfidence = ((adblockPatternCount + elementHidingCount) / totalPatternLines) * 100;
+        standardConfidence = (standardPatternCount / totalPatternLines) * 100;
+      }
+      
+      // Determine detected format based on confidence
+      let detectedFormat: 'standard' | 'adblock' | 'auto' = 'auto';
+      let confidence = 0;
+      
+      if (adblockConfidence > standardConfidence) {
+        detectedFormat = 'adblock';
+        confidence = adblockConfidence;
+      } else if (standardConfidence > adblockConfidence) {
+        detectedFormat = 'standard';
+        confidence = standardConfidence;
+      } else {
+        detectedFormat = 'auto';
+        confidence = 0;
+      }
+
+      // Return detection results
+      res.json({
+        status: 'success',
+        data: {
+          sourceId: source.id,
+          sourceName: source.name,
+          detectedFormat,
+          confidence: Math.round(confidence * 100) / 100,
+          manualFormat: source.format,
+          metadata: {
+            totalLinesAnalyzed: lines.length,
+            totalPatternLines,
+            adblockPatternCount,
+            standardPatternCount,
+            elementHidingCount,
+            allowRuleCount,
+            adblockConfidence: Math.round(adblockConfidence * 100) / 100,
+            standardConfidence: Math.round(standardConfidence * 100) / 100
+          },
+          recommendation: confidence >= 60 
+            ? `Format detected as ${detectedFormat} with ${Math.round(confidence)}% confidence`
+            : 'Low confidence - format could not be reliably detected'
+        }
+      });
+    } catch (error) {
+      logger.error(`Failed to detect format for source ${req.params.id}:`, error);
       next(error);
     }
   }

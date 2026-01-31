@@ -32,4 +32,7 @@ router.post('/:id/refresh-cache', validateIdParam, sourcesController.refreshCach
 // POST /api/sources/refresh-cache - Refresh cache for all sources
 router.post('/refresh-cache', sourcesController.refreshAllCache.bind(sourcesController));
 
+// GET /api/sources/:id/detect-format - Detect format of source content
+router.get('/:id/detect-format', validateIdParam, sourcesController.detectFormat.bind(sourcesController));
+
 export { router as sourcesRouter };

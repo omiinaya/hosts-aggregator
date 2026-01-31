@@ -20,6 +20,11 @@ export const validateCreateSource = [
     .isBoolean()
     .withMessage('Enabled must be a boolean'),
 
+  body('format')
+    .optional()
+    .isIn(['standard', 'adblock', 'auto'])
+    .withMessage('Format must be one of: standard, adblock, auto'),
+
   (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -46,6 +51,11 @@ export const validateUpdateSource = [
     .optional()
     .isBoolean()
     .withMessage('Enabled must be a boolean'),
+
+  body('format')
+    .optional()
+    .isIn(['standard', 'adblock', 'auto'])
+    .withMessage('Format must be one of: standard, adblock, auto'),
 
   (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);

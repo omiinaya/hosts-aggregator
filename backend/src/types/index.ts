@@ -6,6 +6,13 @@
 // ============================================================================
 
 // ============================================================================
+// Format Types
+// ============================================================================
+
+export type SourceFormat = 'standard' | 'adblock' | 'auto';
+export type OutputFormat = 'standard' | 'adblock';
+
+// ============================================================================
 // Source Types
 // ============================================================================
 
@@ -17,6 +24,7 @@ export interface HostsSource {
   type: 'URL' | 'FILE';
   enabled: boolean;
   metadata: Record<string, any> | null;
+  format: SourceFormat | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,6 +34,7 @@ export interface CreateSourceRequest {
   url: string;
   enabled?: boolean;
   metadata?: Record<string, any>;
+  format?: SourceFormat;
 }
 
 export interface UpdateSourceRequest {
@@ -33,6 +42,7 @@ export interface UpdateSourceRequest {
   url?: string;
   enabled?: boolean;
   metadata?: Record<string, any>;
+  format?: SourceFormat;
 }
 
 // ============================================================================
@@ -71,6 +81,7 @@ export interface SourceContent {
   contentHash: string;
   lineCount: number;
   entryCount: number;
+  format: SourceFormat | null;
   fetchedAt: Date;
   updatedAt: Date;
 }
@@ -104,9 +115,6 @@ export interface AggregationResult {
   blockEntries: number;
   processingTimeMs: number;
   triggeredBy: 'manual' | 'scheduled' | 'auto' | 'webhook';
-  filePath: string;
-  fileSizeBytes: number | null;
-  fileHash: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
