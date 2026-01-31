@@ -5,8 +5,35 @@
 All API endpoints are prefixed with `/api`:
 
 ```
-http://localhost:3001/api
+http://localhost:3010/api
 ```
+
+## Output Formats
+
+The hosts aggregator supports two output formats:
+
+### ABP Format (Default)
+- **Format**: AdBlock Plus style with `||domain^` patterns
+- **Use case**: uBlock Origin, AdGuard, and other modern adblockers
+- **Example output**:
+  ```
+  ||example.com^
+  ||ads.example.com^
+  @@||trusted-site.com^
+  ```
+
+### Standard Format
+- **Format**: Traditional hosts file format with `0.0.0.0 domain` patterns
+- **Use case**: Pi-hole, AdGuard Home, and other DNS-based blockers
+- **Example output**:
+  ```
+  0.0.0.0 example.com
+  0.0.0.0 ads.example.com
+  ```
+
+### Format Selection
+- Default: ABP format (no query parameter needed)
+- Standard: Add `?format=standard` to any serve endpoint
 
 ## Authentication
 
@@ -310,7 +337,7 @@ CORS is configured to allow requests from:
 ### Creating a New Source
 
 ```bash
-curl -X POST http://localhost:3001/api/sources \
+curl -X POST http://localhost:3010/api/sources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "StevenBlack Hosts",
@@ -322,7 +349,7 @@ curl -X POST http://localhost:3001/api/sources \
 ### Triggering Aggregation
 
 ```bash
-curl -X POST http://localhost:3001/api/aggregated
+curl -X POST http://localhost:3010/api/aggregated
 ```
 
 ### Serving Hosts File
@@ -330,11 +357,110 @@ curl -X POST http://localhost:3001/api/aggregated
 The hosts file is served dynamically from the database. Use the serve endpoints:
 
 ```bash
-# Get hosts file with headers
-curl http://localhost:3001/api/serve/hosts
+# Get hosts file in ABP format (default)
+curl http://localhost:3010/api/serve/hosts
 
-# Get raw hosts file (no headers)
-curl http://localhost:3001/api/serve/hosts/raw
+# Get raw hosts file in ABP format (no headers)
+curl http://localhost:3010/api/serve/hosts/raw
+
+# Get hosts file in standard format
+curl http://localhost:3010/api/serve/hosts?format=standard
+
+# Get raw hosts file in standard format
+curl http://localhost:3010/api/serve/hosts/raw?format=standard
+```
+
+## Serving Endpoints
+
+### Serve Hosts File (ABP Format - Default)
+
+**Endpoint:** `GET /api/serve/hosts`
+
+**Query Parameters:**
+- `format` (optional) - Output format: `abp` (default) or `standard`
+
+**Response:** Text file in ABP format with headers
+
+**Example:**
+```
+! Unified Hosts File - ABP Format
+! Generated: 2026-01-31T19:00:00.000Z
+! Total domains: 1000
+! Sources: 3
+!
+! This file uses AdBlock Plus format (||domain^)
+! Compatible with uBlock Origin, AdGuard, and other adblockers
+!
+
+||example.com^
+||ads.example.com^
+@@||trusted-site.com^
+```
+
+### Serve Raw Hosts File (ABP Format - Default)
+
+**Endpoint:** `GET /api/serve/hosts/raw`
+
+**Query Parameters:**
+- `format` (optional) - Output format: `abp` (default) or `standard`
+
+**Response:** Text file in ABP format without headers
+
+**Example:**
+```
+||example.com^
+||ads.example.com^
+@@||trusted-site.com^
+```
+
+### Serve ABP Format
+
+**Endpoint:** `GET /api/serve/abp`
+
+**Response:** Text file in ABP format with headers (same as `/api/serve/hosts` without format parameter)
+
+### Serve Raw ABP Format
+
+**Endpoint:** `GET /api/serve/abp/raw`
+
+**Response:** Text file in ABP format without headers (same as `/api/serve/hosts/raw` without format parameter)
+
+### Get Hosts File Information
+
+**Endpoint:** `GET /api/serve/hosts/info`
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "filename": "unified-hosts.txt",
+    "size": 25000,
+    "entries": 1000,
+    "totalSources": 3,
+    "generatedAt": "2026-01-31T19:00:00.000Z",
+    "downloadUrl": "http://localhost:3010/api/serve/hosts",
+    "rawDownloadUrl": "http://localhost:3010/api/serve/hosts/raw"
+  }
+}
+```
+
+### Health Check
+
+**Endpoint:** `GET /api/serve/health`
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "healthy": true,
+    "hasHostsFile": true,
+    "lastGenerated": "2026-01-31T19:00:00.000Z",
+    "totalEntries": 1000,
+    "message": "Hosts file is available for serving"
+  }
+}
 ```
 
 See [SERVING.md](SERVING.md) for more details on serving configuration.

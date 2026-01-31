@@ -91,9 +91,11 @@ npm run dev
 ```
 backend/src/
 ├── config/           # Configuration files
-│   └── database.ts   # Database configuration
+│   ├── database.ts   # Database configuration
+│   └── serving.ts    # Serving configuration
 ├── controllers/      # Request handlers
 │   ├── aggregate.controller.ts
+│   ├── serve.controller.ts
 │   └── sources.controller.ts
 ├── middleware/       # Express middleware
 │   ├── error.middleware.ts
@@ -103,11 +105,13 @@ backend/src/
 ├── routes/           # API routes
 │   ├── aggregate.ts
 │   ├── index.ts
+│   ├── serve.ts
 │   └── sources.ts
 ├── services/         # Business logic
 │   ├── aggregation.service.ts
-│   ├── file.service.ts
-│   └── parser.service.ts
+│   ├── auto-aggregation.service.ts
+│   ├── parser.service.ts
+│   └── file.service.ts
 ├── types/            # TypeScript types
 │   └── index.ts
 ├── utils/            # Utility functions
@@ -162,6 +166,94 @@ frontend/src/
 3. **Add Hooks:** Create custom hooks for state management
 4. **Update Routes:** Add new pages to routing
 5. **Write Tests:** Add component and integration tests
+
+## Format Types
+
+The hosts aggregator supports multiple input and output formats for maximum compatibility with different adblocking systems.
+
+### Source Format Types
+
+Sources can be configured with the following format types:
+
+- **`standard`**: Traditional hosts file format (e.g., `0.0.0.0 example.com`)
+- **`adblock`**: AdBlock Plus format (e.g., `||example.com^`)
+- **`auto`**: Automatic format detection (default)
+
+Format is specified when creating or updating a source:
+
+```typescript
+{
+  "name": "My Source",
+  "url": "https://example.com/hosts",
+  "type": "URL",
+  "format": "auto"  // or "standard" or "adblock"
+}
+```
+
+### Output Format Types
+
+The serve endpoints support two output formats:
+
+- **`abp`**: AdBlock Plus format (default)
+  - Pattern: `||domain^` for blocking, `@@||domain^` for allowing
+  - Compatible with: uBlock Origin, AdGuard, and other modern adblockers
+
+- **`standard`**: Traditional hosts format
+  - Pattern: `0.0.0.0 domain` for blocking
+  - Compatible with: Pi-hole, AdGuard Home, and other DNS-based blockers
+
+### Format Selection
+
+Output format is selected via query parameter:
+
+```bash
+# ABP format (default)
+curl http://localhost:3010/api/serve/hosts
+
+# Standard format
+curl http://localhost:3010/api/serve/hosts?format=standard
+```
+
+### Format Detection
+
+When a source is configured with `format: "auto"`, the parser automatically detects the format:
+
+1. Checks for ABP patterns (`||domain^`, `@@||domain^`)
+2. Falls back to standard hosts format if no ABP patterns found
+3. Stores detected format in the database for future reference
+
+### Working with Formats
+
+#### Adding Format Support
+
+To add support for a new format:
+
+1. Update the `SourceFormat` type in `src/types/index.ts`
+2. Implement parsing logic in `src/services/parser.service.ts`
+3. Add format conversion logic in `src/controllers/serve.controller.ts`
+4. Update documentation
+
+#### Testing Format Support
+
+Test format detection and conversion:
+
+```bash
+# Test ABP format
+curl http://localhost:3010/api/serve/abp
+
+# Test standard format
+curl http://localhost:3010/api/serve/hosts?format=standard
+
+# Test format detection
+curl -X POST http://localhost:3010/api/sources \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Source",
+    "url": "https://example.com/hosts",
+    "type": "URL",
+    "format": "auto"
+  }'
+```
 
 ## Database Management
 

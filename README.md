@@ -1,6 +1,6 @@
 # Hosts Aggregator
 
-A Node.js TypeScript web application for aggregating adblocker hosts files from multiple sources into a unified hosts file.
+A Node.js TypeScript web application for aggregating adblocker hosts files from multiple sources into a unified hosts file. The served file defaults to **ABP (AdBlock Plus) format** for compatibility with uBlock Origin, AdGuard, and other modern adblockers. Standard hosts format is also available for Pi-hole and AdGuard Home.
 
 ## Project Structure
 
@@ -21,6 +21,9 @@ hosts-aggregator/
 ## Features
 
 - **Multi-source aggregation**: Combine hosts files from multiple sources
+- **ABP format support**: Default output in AdBlock Plus format (||domain^) for uBlock Origin, AdGuard, and other adblockers
+- **Standard format support**: Optional standard hosts format (0.0.0.0 domain) for Pi-hole and AdGuard Home
+- **Format detection**: Automatic detection of source format (standard, adblock, or auto)
 - **Real-time processing**: Live aggregation with progress tracking
 - **File upload support**: Upload custom hosts files
 - **Scheduled updates**: Automatic updates for URL-based sources
@@ -88,6 +91,38 @@ Access the application at http://localhost:3011
 
 Backend API is available at http://localhost:3010/api
 
+## Output Formats
+
+The hosts aggregator supports two output formats:
+
+### ABP Format (Default)
+- **Format**: AdBlock Plus style with `||domain^` patterns
+- **Use case**: uBlock Origin, AdGuard, and other modern adblockers
+- **Example output**:
+  ```
+  ||example.com^
+  ||ads.example.com^
+  @@||trusted-site.com^
+  ```
+- **Endpoint**: `GET /api/serve/hosts` (default) or `GET /api/serve/abp`
+
+### Standard Format
+- **Format**: Traditional hosts file format with `0.0.0.0 domain` patterns
+- **Use case**: Pi-hole, AdGuard Home, and other DNS-based blockers
+- **Example output**:
+  ```
+  0.0.0.0 example.com
+  0.0.0.0 ads.example.com
+  ```
+- **Endpoint**: `GET /api/serve/hosts?format=standard`
+
+### Format Selection
+- Default: ABP format (no query parameter needed)
+- Standard: Add `?format=standard` to any serve endpoint
+- Raw endpoints available without headers for both formats
+
+See [docs/SERVING.md](docs/SERVING.md) for detailed serving configuration.
+
 ## Technology Stack
 
 ### Backend
@@ -108,6 +143,7 @@ Backend API is available at http://localhost:3010/api
 
 - [Architecture Overview](docs/ARCHITECTURE.md)
 - [API Documentation](docs/API.md)
+- [Serving Guide](docs/SERVING.md) - Format options and configuration
 - [Development Guide](docs/DEVELOPMENT.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md)

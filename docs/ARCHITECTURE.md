@@ -21,6 +21,7 @@ The Hosts Aggregator application follows a modern microservices architecture wit
 3. **Services Layer** - Business logic implementation
 4. **Controllers** - Request/response handling
 5. **Routes** - API endpoint definitions
+6. **Parser Service** - Format detection and conversion logic
 
 ### Data Flow
 
@@ -28,6 +29,28 @@ The Hosts Aggregator application follows a modern microservices architecture wit
 Request → Routes → Validation → Controllers → Services → Database
 Response ← Routes ← Controllers ← Services ← Database
 ```
+
+### Format Detection and Conversion Flow
+
+The system supports multiple input and output formats:
+
+```
+Source File → Format Detection → Parser → Database → Format Conversion → Output
+                (auto/standard/adblock)                    (ABP/Standard)
+```
+
+**Format Detection:**
+- **Auto**: Automatically detects format from source content
+- **Standard**: Traditional hosts format (0.0.0.0 domain)
+- **AdBlock**: ABP format (||domain^)
+
+**Output Formats:**
+- **ABP (Default)**: AdBlock Plus format with ||domain^ patterns
+- **Standard**: Traditional hosts format with 0.0.0.0 domain patterns
+
+**Format Selection:**
+- Default output: ABP format
+- Standard output: Add `?format=standard` query parameter
 
 ### Key Features
 
@@ -37,6 +60,7 @@ Response ← Routes ← Controllers ← Services ← Database
 - **Logging** - Winston-based logging system
 - **Validation** - Zod schema validation
 - **Rate Limiting** - Request throttling protection
+- **Format Support** - ABP and standard hosts format with automatic detection
 
 ## Frontend Architecture
 
@@ -142,8 +166,10 @@ frontend/
 - `GET /api/aggregated/history` - Get aggregation history
 
 ### Serving
-- `GET /api/serve/hosts` - Serve hosts file with headers
-- `GET /api/serve/hosts/raw` - Serve raw hosts file
+- `GET /api/serve/hosts` - Serve hosts file (ABP format by default, supports `?format=standard`)
+- `GET /api/serve/hosts/raw` - Serve raw hosts file (ABP format by default, supports `?format=standard`)
+- `GET /api/serve/abp` - Serve hosts file in ABP format
+- `GET /api/serve/abp/raw` - Serve raw hosts file in ABP format
 - `GET /api/serve/hosts/info` - Get hosts file metadata
 - `GET /api/serve/health` - Health check endpoint
 
@@ -160,6 +186,7 @@ frontend/
 - **Caching** - Source data caching to reduce API calls
 - **Deduplication** - Efficient duplicate removal algorithm
 - **Dynamic Serving** - All hosts file content served dynamically from database
+- **Format Conversion** - On-the-fly format conversion between ABP and standard formats
 - **Database Indexing** - Optimized query performance
 - **Compression** - Response compression for large files
 
