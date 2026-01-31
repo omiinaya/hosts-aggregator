@@ -80,59 +80,60 @@ export class ServeController {
       // Check format query parameter
       const format = (req.query.format as string)?.toLowerCase();
 
-      // If format is 'adblock', delegate to ABP serve method
-      if (format === 'adblock') {
-        return this.serveABP(req, res, next);
-      }
+      // If format is 'standard', serve in standard hosts format
+      if (format === 'standard') {
+        const hosts = await this.getHostsFromEnabledSources();
 
-      // Default to standard hosts format
-      const hosts = await this.getHostsFromEnabledSources();
+        // Get enabled sources count for header
+        const enabledSourcesCount = await prisma.source.count({
+          where: { enabled: true }
+        });
 
-      // Get enabled sources count for header
-      const enabledSourcesCount = await prisma.source.count({
-        where: { enabled: true }
-      });
-
-      // Build hosts file content
-      let content: string;
-      if (hosts.length === 0) {
-        content = `# Unified Hosts File
+        // Build hosts file content
+        let content: string;
+        if (hosts.length === 0) {
+          content = `# Unified Hosts File
 # Generated: ${new Date().toISOString()}
 # No sources currently enabled
 #
 # Add and enable sources to populate this file
 #
 `;
-      } else {
-        const header = `# Unified Hosts File
+        } else {
+          const header = `# Unified Hosts File
 # Generated: ${new Date().toISOString()}
 # Total domains: ${hosts.length}
 # Sources: ${enabledSourcesCount}
 
 `;
-        content = header + hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
+          content = header + hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
+        }
+
+        // Set appropriate headers for Pi-hole/AdGuard Home
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+
+        // Set cache control headers based on configuration
+        if (servingConfig.cacheControlEnabled) {
+          res.setHeader('Cache-Control', `public, max-age=${servingConfig.cacheMaxAgeSeconds}`);
+          res.setHeader('Expires', new Date(Date.now() + servingConfig.cacheMaxAgeSeconds * 1000).toUTCString());
+        } else {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+
+        // Add informational headers
+        res.setHeader('X-Hosts-File-Generated', new Date().toISOString());
+        res.setHeader('X-Hosts-File-Entries', hosts.length.toString());
+        res.setHeader('X-Hosts-File-Sources', enabledSourcesCount.toString());
+        res.setHeader('X-Hosts-File-Format', 'standard');
+
+        res.send(content);
+        return;
       }
 
-      // Set appropriate headers for Pi-hole/AdGuard Home
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-
-      // Set cache control headers based on configuration
-      if (servingConfig.cacheControlEnabled) {
-        res.setHeader('Cache-Control', `public, max-age=${servingConfig.cacheMaxAgeSeconds}`);
-        res.setHeader('Expires', new Date(Date.now() + servingConfig.cacheMaxAgeSeconds * 1000).toUTCString());
-      } else {
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-      }
-
-      // Add informational headers
-      res.setHeader('X-Hosts-File-Generated', new Date().toISOString());
-      res.setHeader('X-Hosts-File-Entries', hosts.length.toString());
-      res.setHeader('X-Hosts-File-Sources', enabledSourcesCount.toString());
-      res.setHeader('X-Hosts-File-Format', 'standard');
-
-      res.send(content);
+      // Default to ABP format (when no format parameter or format is 'adblock')
+      return this.serveABP(req, res, next);
     } catch (error) {
       logger.error('Failed to serve hosts file:', error);
       next(error);
@@ -144,37 +145,38 @@ export class ServeController {
       // Check format query parameter
       const format = (req.query.format as string)?.toLowerCase();
 
-      // If format is 'adblock', delegate to ABP raw serve method
-      if (format === 'adblock') {
-        return this.serveABPRaw(req, res, next);
-      }
+      // If format is 'standard', serve in standard hosts format
+      if (format === 'standard') {
+        const hosts = await this.getHostsFromEnabledSources();
 
-      // Default to standard hosts format
-      const hosts = await this.getHostsFromEnabledSources();
-
-      let content: string;
-      if (hosts.length === 0) {
-        content = `# Unified Hosts File
+        let content: string;
+        if (hosts.length === 0) {
+          content = `# Unified Hosts File
 # Generated: ${new Date().toISOString()}
 # No sources currently enabled
 #
 # Add and enable sources to populate this file
 #
 `;
-      } else {
-        content = hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
+        } else {
+          content = hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
+        }
+
+        // Set appropriate headers
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('X-Hosts-File-Generated', new Date().toISOString());
+        res.setHeader('X-Hosts-File-Entries', hosts.length.toString());
+        res.setHeader('X-Hosts-File-Format', 'standard');
+
+        res.send(content);
+        return;
       }
 
-      // Set appropriate headers
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('X-Hosts-File-Generated', new Date().toISOString());
-      res.setHeader('X-Hosts-File-Entries', hosts.length.toString());
-      res.setHeader('X-Hosts-File-Format', 'standard');
-
-      res.send(content);
+      // Default to ABP format (when no format parameter or format is 'adblock')
+      return this.serveABPRaw(req, res, next);
     } catch (error) {
       logger.error('Failed to serve raw hosts file:', error);
       next(error);
