@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback, memo } from 'react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
@@ -36,7 +36,7 @@ interface HostTableProps {
   setPage: (page: number) => void
 }
 
-const HostTable: React.FC<HostTableProps> = ({
+const HostTable: React.FC<HostTableProps> = memo(({
   hosts,
   loading,
   error,
@@ -53,7 +53,7 @@ const HostTable: React.FC<HostTableProps> = ({
   const [selectedHost, setSelectedHost] = useState<HostEntry | null>(null)
 
   // Handle bulk enable
-  const handleBulkEnable = async () => {
+  const handleBulkEnable = useCallback(async () => {
     if (selectedHosts.size === 0) return
     try {
       await bulkUpdateHosts({ hostIds: Array.from(selectedHosts), enabled: true })
@@ -62,10 +62,10 @@ const HostTable: React.FC<HostTableProps> = ({
     } catch (error) {
       console.error('Failed to enable hosts:', error)
     }
-  }
+  }, [selectedHosts, bulkUpdateHosts, setSelectedHosts, refetch])
 
   // Handle bulk disable
-  const handleBulkDisable = async () => {
+  const handleBulkDisable = useCallback(async () => {
     if (selectedHosts.size === 0) return
     try {
       await bulkUpdateHosts({ hostIds: Array.from(selectedHosts), enabled: false })
@@ -74,10 +74,10 @@ const HostTable: React.FC<HostTableProps> = ({
     } catch (error) {
       console.error('Failed to disable hosts:', error)
     }
-  }
+  }, [selectedHosts, bulkUpdateHosts, setSelectedHosts, refetch])
 
   // Handle bulk toggle
-  const handleBulkToggle = async () => {
+  const handleBulkToggle = useCallback(async () => {
     if (selectedHosts.size === 0) return
     try {
       await bulkToggleHosts({ hostIds: Array.from(selectedHosts) })
@@ -86,43 +86,45 @@ const HostTable: React.FC<HostTableProps> = ({
     } catch (error) {
       console.error('Failed to toggle hosts:', error)
     }
-  }
+  }, [selectedHosts, bulkToggleHosts, setSelectedHosts, refetch])
 
   // Handle select all
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = useCallback((checked: boolean) => {
     if (checked && hosts) {
       setSelectedHosts(new Set(hosts.map(h => h.id)))
     } else {
       setSelectedHosts(new Set())
     }
-  }
+  }, [hosts, setSelectedHosts])
 
   // Handle individual checkbox
-  const handleSelectHost = (hostId: string, checked: boolean) => {
-    const newSelected = new Set(selectedHosts)
-    if (checked) {
-      newSelected.add(hostId)
-    } else {
-      newSelected.delete(hostId)
-    }
-    setSelectedHosts(newSelected)
-  }
+  const handleSelectHost = useCallback((hostId: string, checked: boolean) => {
+    setSelectedHosts(prev => {
+      const newSelected = new Set(prev)
+      if (checked) {
+        newSelected.add(hostId)
+      } else {
+        newSelected.delete(hostId)
+      }
+      return newSelected
+    })
+  }, [setSelectedHosts])
 
   // Handle page change
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage)
     setSelectedHosts(new Set())
-  }
+  }, [setPage, setSelectedHosts])
 
   // Get entry type badge color
-  const getEntryTypeColor = (type: string) => {
+  const getEntryTypeColor = useCallback((type: string) => {
     switch (type) {
       case 'block': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
       case 'allow': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
       case 'element': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
     }
-  }
+  }, [])
 
   if (loading) {
     return (
@@ -313,8 +315,8 @@ const HostTable: React.FC<HostTableProps> = ({
               onClick={() => handlePageChange(pagination.page + 1)}
               disabled={pagination.page === pagination.totalPages}
             >
-              Next
               <ChevronRight className="h-4 w-4" />
+              Next
             </Button>
           </div>
         </div>
@@ -409,7 +411,9 @@ const HostTable: React.FC<HostTableProps> = ({
       </Dialog>
     </>
   )
-}
+})
+
+HostTable.displayName = 'HostTable'
 
 interface HostFiltersProps {
   stats: HostStatsType | null | undefined
@@ -421,7 +425,7 @@ interface HostFiltersProps {
   }) => void
 }
 
-const HostFilters: React.FC<HostFiltersProps> = ({ stats, onFiltersChange }) => {
+const HostFilters: React.FC<HostFiltersProps> = memo(({ stats, onFiltersChange }) => {
   // Internal state for filters - this component maintains its own state
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -598,7 +602,9 @@ const HostFilters: React.FC<HostFiltersProps> = ({ stats, onFiltersChange }) => 
       </Card>
     </>
   )
-}
+})
+
+HostFilters.displayName = 'HostFilters'
 
 const Hosts = () => {
   // Filter values received from HostFilters - only used for passing to HostTable
@@ -622,7 +628,7 @@ const Hosts = () => {
     setPage(1)
   }, [filters])
 
-  // Build query params
+  // Build query params - memoized to prevent unnecessary recalculations
   const params: HostListParams = useMemo(() => ({
     page,
     limit: 20,
@@ -630,7 +636,7 @@ const Hosts = () => {
     enabled: filters.enabledFilter === 'all' ? undefined : filters.enabledFilter === 'enabled',
     entryType: filters.entryTypeFilter === 'all' ? undefined : filters.entryTypeFilter,
     sourceId: filters.sourceFilter === 'all' ? undefined : filters.sourceFilter,
-  }), [page, filters])
+  }), [page, filters.search, filters.enabledFilter, filters.entryTypeFilter, filters.sourceFilter])
 
   // Fetch data
   const { data: hostsData, loading: hostsLoading, error: hostsError, refetch } = useHosts(params)
@@ -642,14 +648,14 @@ const Hosts = () => {
   const { bulkToggleHosts } = useBulkToggleHosts()
 
   // Handle individual host toggle
-  const handleToggleHost = async (host: HostEntry) => {
+  const handleToggleHost = useCallback(async (host: HostEntry) => {
     try {
       await toggleHost(host.id, !host.enabled)
       refetch()
     } catch (error) {
       console.error('Failed to toggle host:', error)
     }
-  }
+  }, [toggleHost, refetch])
 
   // Handle filter changes from HostFilters - memoized to prevent infinite loop
   const handleFiltersChange = useCallback((newFilters: {
@@ -658,7 +664,18 @@ const Hosts = () => {
     entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
     sourceFilter: string
   }) => {
-    setFilters(newFilters)
+    setFilters(prev => {
+      // Only update if values have actually changed
+      if (
+        prev.search === newFilters.search &&
+        prev.enabledFilter === newFilters.enabledFilter &&
+        prev.entryTypeFilter === newFilters.entryTypeFilter &&
+        prev.sourceFilter === newFilters.sourceFilter
+      ) {
+        return prev // Return same reference to prevent re-render
+      }
+      return newFilters
+    })
   }, [])
 
   if (hostsLoading || statsLoading) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   HostEntry,
   HostListResponse,
@@ -18,6 +18,20 @@ export const useHosts = (params?: HostListParams) => {
   const [data, setData] = useState<HostListResponse | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<Error | null>(null)
+
+  // Serialize params to a stable string for dependency comparison
+  // This ensures the key only changes when actual values change, not on every render
+  const paramsKey = useMemo(() => {
+    if (!params) return ''
+    return JSON.stringify({
+      page: params.page,
+      limit: params.limit,
+      enabled: params.enabled,
+      entryType: params.entryType,
+      search: params.search,
+      sourceId: params.sourceId,
+    })
+  }, [params?.page, params?.limit, params?.enabled, params?.entryType, params?.search, params?.sourceId])
 
   const fetchHosts = useCallback(async () => {
     setLoading(true)
@@ -46,7 +60,7 @@ export const useHosts = (params?: HostListParams) => {
     } finally {
       setLoading(false)
     }
-  }, [params])
+  }, [paramsKey])
 
   useEffect(() => {
     fetchHosts()
