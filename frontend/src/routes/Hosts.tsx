@@ -27,7 +27,7 @@ interface HostTableProps {
     totalPages: number
   }
   selectedHosts: Set<string>
-  setSelectedHosts: (hosts: Set<string>) => void
+  setSelectedHosts: React.Dispatch<React.SetStateAction<Set<string>>>
   toggleHost: (host: HostEntry) => Promise<void>
   bulkUpdateHosts: (params: { hostIds: string[]; enabled: boolean }) => Promise<void>
   bulkToggleHosts: (params: { hostIds: string[] }) => Promise<void>
@@ -434,7 +434,7 @@ const HostFilters: React.FC<HostFiltersProps> = memo(({ stats, onFiltersChange }
   const [sourceFilter, setSourceFilter] = useState<string>('all')
 
   // Debounce timeout ref
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Debounce search input
   useEffect(() => {
