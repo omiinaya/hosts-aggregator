@@ -411,38 +411,41 @@ const HostTable: React.FC<HostTableProps> = ({
   )
 }
 
-const Hosts = () => {
-  // Filter state
+interface HostFiltersProps {
+  stats: HostStatsType | null | undefined
+  onFiltersChange: (filters: {
+    search: string
+    enabledFilter: 'all' | 'enabled' | 'disabled'
+    entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
+    sourceFilter: string
+  }) => void
+}
+
+const HostFilters: React.FC<HostFiltersProps> = ({ stats, onFiltersChange }) => {
+  // Internal state for filters - this component maintains its own state
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
   const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'block' | 'allow' | 'element'>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
-  const [page, setPage] = useState(1)
-  const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set())
 
   // Debounce timeout ref
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Debounce search input - fixed version
+  // Debounce search input
   useEffect(() => {
-    // Store the current timeout ID
     const currentTimeout = searchTimeoutRef.current
     
-    // Clear previous timeout if it exists
     if (currentTimeout) {
       clearTimeout(currentTimeout)
     }
 
-    // Create new timeout
     const timeoutId = setTimeout(() => {
       setDebouncedSearch(search)
     }, 400)
     
-    // Store the new timeout ID
     searchTimeoutRef.current = timeoutId
 
-    // Cleanup function
     return () => {
       if (searchTimeoutRef.current === timeoutId) {
         clearTimeout(timeoutId)
@@ -450,80 +453,18 @@ const Hosts = () => {
     }
   }, [search])
 
-  // Reset page when debounced search changes
+  // Notify parent when debounced search or filters change
   useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch])
-
-  // Build query params
-  const params: HostListParams = useMemo(() => ({
-    page,
-    limit: 20,
-    search: debouncedSearch || undefined,
-    enabled: enabledFilter === 'all' ? undefined : enabledFilter === 'enabled',
-    entryType: entryTypeFilter === 'all' ? undefined : entryTypeFilter,
-    sourceId: sourceFilter === 'all' ? undefined : sourceFilter,
-  }), [page, debouncedSearch, enabledFilter, entryTypeFilter, sourceFilter])
-
-  // Fetch data
-  const { data: hostsData, loading: hostsLoading, error: hostsError, refetch } = useHosts(params)
-  const { data: stats, loading: statsLoading } = useHostStats()
-  
-  // Mutation hooks
-  const { toggleHost } = useToggleHost()
-  const { bulkUpdateHosts } = useBulkUpdateHosts()
-  const { bulkToggleHosts } = useBulkToggleHosts()
-
-  // Handle individual host toggle
-  const handleToggleHost = async (host: HostEntry) => {
-    try {
-      await toggleHost(host.id, !host.enabled)
-      refetch()
-    } catch (error) {
-      console.error('Failed to toggle host:', error)
-    }
-  }
-
-  if (hostsLoading || statsLoading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-          <div className="h-12 bg-gray-200 rounded mb-4"></div>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (hostsError) {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-red-600">Error loading hosts: {(hostsError as Error).message}</div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+    onFiltersChange({
+      search: debouncedSearch,
+      enabledFilter,
+      entryTypeFilter,
+      sourceFilter
+    })
+  }, [debouncedSearch, enabledFilter, entryTypeFilter, sourceFilter, onFiltersChange])
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Hosts Management</h1>
-        <p className="text-muted-foreground">View and manage individual host entries</p>
-      </div>
-
+    <>
       {/* Statistics Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -607,7 +548,6 @@ const Hosts = () => {
               <Label htmlFor="enabled-filter">Status</Label>
               <Select value={enabledFilter} onValueChange={(value: any) => {
                 setEnabledFilter(value)
-                setPage(1)
               }}>
                 <SelectTrigger id="enabled-filter">
                   <SelectValue />
@@ -623,7 +563,6 @@ const Hosts = () => {
               <Label htmlFor="entry-type-filter">Entry Type</Label>
               <Select value={entryTypeFilter} onValueChange={(value: any) => {
                 setEntryTypeFilter(value)
-                setPage(1)
               }}>
                 <SelectTrigger id="entry-type-filter">
                   <SelectValue />
@@ -640,7 +579,6 @@ const Hosts = () => {
               <Label htmlFor="source-filter">Source</Label>
               <Select value={sourceFilter} onValueChange={(value) => {
                 setSourceFilter(value)
-                setPage(1)
               }}>
                 <SelectTrigger id="source-filter">
                   <SelectValue />
@@ -658,8 +596,115 @@ const Hosts = () => {
           </div>
         </CardContent>
       </Card>
+    </>
+  )
+}
 
-      {/* Host Table Component */}
+const Hosts = () => {
+  // Filter values received from HostFilters - only used for passing to HostTable
+  const [filters, setFilters] = useState<{
+    search: string
+    enabledFilter: 'all' | 'enabled' | 'disabled'
+    entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
+    sourceFilter: string
+  }>({
+    search: '',
+    enabledFilter: 'all',
+    entryTypeFilter: 'all',
+    sourceFilter: 'all'
+  })
+
+  const [page, setPage] = useState(1)
+  const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set())
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [filters])
+
+  // Build query params
+  const params: HostListParams = useMemo(() => ({
+    page,
+    limit: 20,
+    search: filters.search || undefined,
+    enabled: filters.enabledFilter === 'all' ? undefined : filters.enabledFilter === 'enabled',
+    entryType: filters.entryTypeFilter === 'all' ? undefined : filters.entryTypeFilter,
+    sourceId: filters.sourceFilter === 'all' ? undefined : filters.sourceFilter,
+  }), [page, filters])
+
+  // Fetch data
+  const { data: hostsData, loading: hostsLoading, error: hostsError, refetch } = useHosts(params)
+  const { data: stats, loading: statsLoading } = useHostStats()
+  
+  // Mutation hooks
+  const { toggleHost } = useToggleHost()
+  const { bulkUpdateHosts } = useBulkUpdateHosts()
+  const { bulkToggleHosts } = useBulkToggleHosts()
+
+  // Handle individual host toggle
+  const handleToggleHost = async (host: HostEntry) => {
+    try {
+      await toggleHost(host.id, !host.enabled)
+      refetch()
+    } catch (error) {
+      console.error('Failed to toggle host:', error)
+    }
+  }
+
+  // Handle filter changes from HostFilters
+  const handleFiltersChange = (newFilters: {
+    search: string
+    enabledFilter: 'all' | 'enabled' | 'disabled'
+    entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
+    sourceFilter: string
+  }) => {
+    setFilters(newFilters)
+  }
+
+  if (hostsLoading || statsLoading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+          <div className="h-12 bg-gray-200 rounded mb-4"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="h-16 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (hostsError) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-red-600">Error loading hosts: {(hostsError as Error).message}</div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Hosts Management</h1>
+        <p className="text-muted-foreground">View and manage individual host entries</p>
+      </div>
+
+      {/* HostFilters Component - maintains its own state */}
+      <HostFilters stats={stats} onFiltersChange={handleFiltersChange} />
+
+      {/* HostTable Component - only this re-renders when data changes */}
       <HostTable
         hosts={hostsData?.hosts || []}
         loading={hostsLoading}
