@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
@@ -651,15 +651,15 @@ const Hosts = () => {
     }
   }
 
-  // Handle filter changes from HostFilters
-  const handleFiltersChange = (newFilters: {
+  // Handle filter changes from HostFilters - memoized to prevent infinite loop
+  const handleFiltersChange = useCallback((newFilters: {
     search: string
     enabledFilter: 'all' | 'enabled' | 'disabled'
     entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
     sourceFilter: string
   }) => {
     setFilters(newFilters)
-  }
+  }, [])
 
   if (hostsLoading || statsLoading) {
     return (
