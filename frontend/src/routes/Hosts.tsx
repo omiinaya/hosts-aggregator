@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
@@ -27,14 +27,14 @@ const Hosts = () => {
   const [selectedHost, setSelectedHost] = useState<HostEntry | null>(null)
 
   // Build query params
-  const params: HostListParams = {
+  const params: HostListParams = useMemo(() => ({
     page,
     limit: 20,
     search: search || undefined,
     enabled: enabledFilter === 'all' ? undefined : enabledFilter === 'enabled',
     entryType: entryTypeFilter === 'all' ? undefined : entryTypeFilter,
     sourceId: sourceFilter === 'all' ? undefined : sourceFilter,
-  }
+  }), [page, search, enabledFilter, entryTypeFilter, sourceFilter])
 
   // Fetch data
   const { data: hostsData, loading: hostsLoading, error: hostsError, refetch } = useHosts(params)
