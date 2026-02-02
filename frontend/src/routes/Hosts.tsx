@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
@@ -6,12 +6,12 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Switch } from '../components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { 
-  useHosts, 
-  useHostStats, 
-  useToggleHost, 
-  useBulkUpdateHosts, 
-  useBulkToggleHosts 
+import {
+  useHosts,
+  useHostStats,
+  useToggleHost,
+  useBulkUpdateHosts,
+  useBulkToggleHosts
 } from '../hooks/useHosts'
 import { HostEntry, HostStats as HostStatsType, HostListParams } from '../types'
 import { Check, ChevronLeft, ChevronRight, Search, Power, PowerOff } from 'lucide-react'
@@ -19,6 +19,7 @@ import { Check, ChevronLeft, ChevronRight, Search, Power, PowerOff } from 'lucid
 const Hosts = () => {
   // Filter state
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
   const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'block' | 'allow' | 'element'>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
@@ -26,15 +27,43 @@ const Hosts = () => {
   const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set())
   const [selectedHost, setSelectedHost] = useState<HostEntry | null>(null)
 
+  // Debounce timeout ref
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Debounce search input
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    // Set new timeout
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 400)
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [search])
+
+  // Reset page when debounced search changes
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
+
   // Build query params
   const params: HostListParams = useMemo(() => ({
     page,
     limit: 20,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     enabled: enabledFilter === 'all' ? undefined : enabledFilter === 'enabled',
     entryType: entryTypeFilter === 'all' ? undefined : entryTypeFilter,
     sourceId: sourceFilter === 'all' ? undefined : sourceFilter,
-  }), [page, search, enabledFilter, entryTypeFilter, sourceFilter])
+  }), [page, debouncedSearch, enabledFilter, entryTypeFilter, sourceFilter])
 
   // Fetch data
   const { data: hostsData, loading: hostsLoading, error: hostsError, refetch } = useHosts(params)
@@ -244,7 +273,6 @@ const Hosts = () => {
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value)
-                    setPage(1)
                   }}
                   className="pl-10"
                 />
