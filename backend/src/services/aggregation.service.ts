@@ -37,8 +37,8 @@ export class AggregationService {
       const processedSources: string[] = [];
       const sourceStats: Map<string, { entries: number; duration: number; status: string }> = new Map();
 
-      // Process each source
-      for (const source of sources) {
+      // Process all sources in parallel
+      const processingPromises = sources.map(async (source) => {
         const sourceStartTime = Date.now();
         try {
           // Verify source still exists before processing
@@ -49,7 +49,7 @@ export class AggregationService {
 
           if (!sourceExists) {
             logger.warn(`Source ${source.id} no longer exists, skipping`);
-            continue;
+            return null;
           }
 
           const content = await this.fetchSourceContent(source);
@@ -68,14 +68,13 @@ export class AggregationService {
           // Store entries in database with host relationships
           await this.storeSourceEntries(source.id, entries);
 
-          allEntries.push(...entries);
-          processedSources.push(source.id);
-
           const duration = Date.now() - sourceStartTime;
           sourceStats.set(source.id, { entries: entries.length, duration, status: 'SUCCESS' });
 
           // Log successful fetch
           await this.logSourceFetch(source.id, 'SUCCESS', 200, null, duration, entries.length);
+
+          return { sourceId: source.id, entries };
         } catch (error) {
           const duration = Date.now() - sourceStartTime;
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -89,6 +88,18 @@ export class AggregationService {
           } catch (logError) {
             logger.warn(`Could not log fetch error for source ${source.id}:`, logError);
           }
+          
+          return null;
+        }
+      });
+
+      const processingResults = await Promise.all(processingPromises);
+      
+      // Collect results from successful sources
+      for (const result of processingResults) {
+        if (result) {
+          allEntries.push(...result.entries);
+          processedSources.push(result.sourceId);
         }
       }
 
@@ -142,27 +153,36 @@ export class AggregationService {
         }
       }
 
-      for (const domain of result.blockedDomains) {
-        try {
-          // Use findFirst since normalized is no longer unique (just indexed)
-          const hostEntry = await prisma.hostEntry.findFirst({
-            where: { normalized: domain.toLowerCase() }
-          });
+      // Batch fetch all host entries for blocked domains
+      const normalizedDomains = result.blockedDomains.map(d => d.toLowerCase());
+      const hostEntries = await prisma.hostEntry.findMany({
+        where: { normalized: { in: normalizedDomains } },
+        select: { id: true, normalized: true }
+      });
 
-          if (hostEntry) {
-            const sourceIds = domainToSources.get(domain) || [];
-            await prisma.aggregationHost.create({
-              data: {
-                aggregationResultId: aggregationResult.id,
-                hostEntryId: hostEntry.id,
-                sourceIds: JSON.stringify(sourceIds),
-                primarySourceId: sourceIds[0] || ''
-              }
-            });
-          }
-        } catch (error) {
-          logger.warn(`Could not create aggregation host record for ${domain}:`, error);
+      // Create a map for quick lookup
+      const entryMap = new Map(hostEntries.map(e => [e.normalized, e.id]));
+
+      // Batch create aggregation hosts
+      const hostsToCreate = [];
+      for (const domain of result.blockedDomains) {
+        const normalized = domain.toLowerCase();
+        const entryId = entryMap.get(normalized);
+        if (entryId) {
+          const sourceIds = domainToSources.get(domain) || [];
+          hostsToCreate.push({
+            aggregationResultId: aggregationResult.id,
+            hostEntryId: entryId,
+            sourceIds: JSON.stringify(sourceIds),
+            primarySourceId: sourceIds[0] || ''
+          });
         }
+      }
+
+      if (hostsToCreate.length > 0) {
+        await prisma.aggregationHost.createMany({
+          data: hostsToCreate
+        });
       }
 
       return {
@@ -403,32 +423,21 @@ export class AggregationService {
   }
 
   private async storeSourceEntries(sourceId: string, entries: ParsedEntry[]): Promise<void> {
-    // Check if source still exists (safety check to avoid foreign key violations)
-    const source = await prisma.source.findUnique({
-      where: { id: sourceId },
-      select: { id: true }
-    });
-
-    if (!source) {
-      logger.warn(`Source ${sourceId} not found, skipping entries`);
-      return;
-    }
-
     // Update entry count in source content
     await prisma.sourceContent.updateMany({
       where: { sourceId },
       data: { entryCount: entries.length }
     });
 
-    // Process each entry directly with sourceId on HostEntry
-    for (const entry of entries) {
-      const normalized = entry.domain.toLowerCase().trim();
+    if (entries.length === 0) {
+      return;
+    }
 
-      try {
-        // Upsert host entry using composite unique constraint: domain + sourceId
-        // Note: normalized is not updated on upsert to avoid P2002 violations when
-        // multiple sources share the same domain (same normalized value)
-        await prisma.hostEntry.upsert({
+    // Use transaction for atomic batch operations
+    await prisma.$transaction(async (tx) => {
+      // Batch upsert all entries in parallel
+      const upsertPromises = entries.map(entry =>
+        tx.hostEntry.upsert({
           where: {
             domain_sourceId: {
               domain: entry.domain,
@@ -442,19 +451,18 @@ export class AggregationService {
           },
           create: {
             domain: entry.domain,
-            normalized,
+            normalized: entry.domain.toLowerCase().trim(),
             entryType: entry.type,
             sourceId,
             firstSeen: new Date(),
             lastSeen: new Date(),
             occurrenceCount: 1
           }
-        });
-      } catch (error) {
-        // Log but don't fail - source might have been deleted during processing
-        logger.warn(`Could not store entry for domain ${entry.domain}:`, error);
-      }
-    }
+        })
+      );
+
+      await Promise.all(upsertPromises);
+    });
 
     logger.info(`Stored ${entries.length} entries for source ${sourceId}`);
   }
@@ -566,6 +574,91 @@ export class AggregationService {
     } catch (error) {
       logger.error('Failed to get aggregation stats:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Process a single source and return detailed results.
+   * This method is used for manual source refresh operations.
+   *
+   * @param source - The source to process
+   * @returns Object containing processing results
+   */
+  async processSource(source: any): Promise<{
+    success: boolean;
+    entriesProcessed: number;
+    contentChanged: boolean;
+    format: string;
+    error?: string;
+  }> {
+    const startTime = Date.now();
+
+    try {
+      // Fetch source content
+      const content = await this.fetchSourceContent(source);
+
+      // Detect format
+      const formatDetection = this.detectFormat(
+        content,
+        source.format as 'standard' | 'adblock' | 'auto' | undefined
+      );
+
+      // Store detected format
+      await this.storeDetectedFormat(source.id, formatDetection);
+
+      // Parse content
+      const entries = this.parser.parseContent(content, source.id, formatDetection.format);
+
+      // Store entries
+      await this.storeSourceEntries(source.id, entries);
+
+      // Check if content changed
+      const existingCache = await prisma.sourceContent.findUnique({
+        where: { sourceId: source.id }
+      });
+      const contentChanged = existingCache?.content !== content;
+
+      // Log successful fetch
+      await this.logSourceFetch(
+        source.id,
+        'SUCCESS',
+        200,
+        null,
+        Date.now() - startTime,
+        entries.length
+      );
+
+      return {
+        success: true,
+        entriesProcessed: entries.length,
+        contentChanged,
+        format: formatDetection.format
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Failed to process source ${source.id}:`, error);
+
+      // Log failed fetch
+      try {
+        await this.logSourceFetch(
+          source.id,
+          'ERROR',
+          null,
+          errorMessage,
+          Date.now() - startTime,
+          0
+        );
+      } catch (logError) {
+        logger.warn(`Could not log fetch error for source ${source.id}:`, logError);
+      }
+
+      return {
+        success: false,
+        entriesProcessed: 0,
+        contentChanged: false,
+        format: 'unknown',
+        error: errorMessage
+      };
     }
   }
 }

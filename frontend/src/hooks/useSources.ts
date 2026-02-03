@@ -133,3 +133,29 @@ export const useDeleteSource = () => {
     },
   })
 }
+
+// Refresh a specific source to gather all hosts from it
+export const useRefreshSource = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const response = await fetch(`${API_BASE_URL}/sources/${id}/refresh`, {
+        method: 'POST',
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to refresh source')
+      }
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['sources'] })
+      queryClient.invalidateQueries({ queryKey: ['hosts'] })
+      toast.success('Source refreshed successfully')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+}

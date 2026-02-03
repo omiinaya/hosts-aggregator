@@ -107,7 +107,7 @@ export class HostsParser {
     if (pattern.includes('##')) {
       const parts = pattern.split('##');
       const domain = parts[0].trim();
-      if (this.isValidDomain(domain)) {
+      if (domain.length > 0) {
         return {
           domain,
           fullPattern: pattern,
@@ -117,48 +117,41 @@ export class HostsParser {
       return null;
     }
     
-    // Validate ABP pattern starts with || or @@||
-    if (!pattern.startsWith('||') && !pattern.startsWith('@@||')) {
+    // Handle exception rules (@@||domain.com^)
+    const isException = pattern.startsWith('@@');
+    const cleanPattern = isException ? pattern.substring(2) : pattern;
+    
+    // Validate ABP pattern starts with ||
+    if (!cleanPattern.startsWith('||')) {
       return null;
     }
     
-    // Validate ABP pattern ends with ^
-    if (!pattern.endsWith('^')) {
-      return null;
-    }
-    
-    // Determine type (allow or block)
-    const type: 'block' | 'allow' = pattern.startsWith('@@') ? 'allow' : 'block';
-    
-    // Remove exception prefix (@@) for domain extraction
-    let patternForExtraction = pattern;
-    if (pattern.startsWith('@@')) {
-      patternForExtraction = pattern.substring(2);
-    }
-    
-    // Extract domain from ||domain.com/path^ or ||*domain.com^ patterns
-    // Match everything between || and either / or ^
-    const match = patternForExtraction.match(/\|\|([^\^\/]+)/);
+    // Extract domain - be more flexible with special characters
+    const match = cleanPattern.match(/\|\|([^\^]+)/);
     if (!match) {
       return null;
     }
     
-    let domain = match[1];
+    let domain = match[1].trim();
+    
+    // Remove trailing path if present
+    if (domain.includes('/')) {
+      domain = domain.split('/')[0];
+    }
     
     // Remove wildcard prefix if present
     if (domain.startsWith('*')) {
       domain = domain.substring(1);
     }
     
-    // Validate the extracted domain
-    if (!this.isValidDomain(domain)) {
+    if (domain.length === 0) {
       return null;
     }
     
     return {
       domain,
       fullPattern: pattern,
-      type
+      type: isException ? 'allow' : 'block'
     };
   }
   
@@ -253,8 +246,31 @@ export class HostsParser {
    * @returns true if valid, false otherwise
    */
   private isValidDomain(domain: string): boolean {
-    // Basic domain validation - requires at least one dot (e.g., example.com)
-    const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
-    return domainRegex.test(domain) && domain.length <= 253;
+    // Allow empty strings (for wildcard patterns)
+    if (!domain || domain.length === 0) {
+      return true;
+    }
+    
+    // Allow IP addresses
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (ipRegex.test(domain)) {
+      return true;
+    }
+    
+    // Allow wildcards at start or end
+    if (domain.startsWith('*') || domain.endsWith('*')) {
+      return true;
+    }
+    
+    // Standard domain validation (relaxed to allow underscores)
+    const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*$/;
+    const isValid = domainRegex.test(domain) && domain.length <= 253;
+    
+    // Debug logging for rejected entries
+    if (!isValid && domain.length > 0) {
+      logger.debug(`Domain validation failed: "${domain}"`);
+    }
+    
+    return isValid;
   }
 }

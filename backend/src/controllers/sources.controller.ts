@@ -350,18 +350,40 @@ export class SourcesController {
         return next(createError('Source not found', 404));
       }
 
-      // Trigger aggregation for this specific source
-      try {
-        await this.aggregationService.aggregateSources();
-        logger.info(`Source ${id} refresh completed`);
-      } catch (error) {
-        logger.error(`Failed to refresh source ${id}:`, error);
-        return next(createError('Failed to refresh source', 500));
+      // Store original enabled state
+      const wasEnabled = source.enabled;
+
+      // Temporarily enable the source if it was disabled
+      if (!wasEnabled) {
+        await prisma.source.update({
+          where: { id },
+          data: { enabled: true }
+        });
+      }
+
+      // Process this single source
+      const result = await this.aggregationService.processSource(source);
+
+      // Restore original enabled state
+      if (!wasEnabled) {
+        await prisma.source.update({
+          where: { id },
+          data: { enabled: false }
+        });
+      }
+
+      if (!result.success) {
+        return next(createError(result.error || 'Failed to refresh source', 500));
       }
 
       res.json({
         status: 'success',
-        message: 'Source refresh completed'
+        message: `Source ${id} refreshed successfully`,
+        data: {
+          entriesProcessed: result.entriesProcessed,
+          contentChanged: result.contentChanged,
+          format: result.format
+        }
       });
     } catch (error) {
       logger.error(`Failed to refresh source ${req.params.id}:`, error);

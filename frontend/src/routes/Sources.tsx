@@ -5,19 +5,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Switch } from '../components/ui/switch'
-import { useSources, useCreateSource, useUpdateSource, useDeleteSource } from '../hooks/useSources'
+import { useSources, useCreateSource, useUpdateSource, useDeleteSource, useRefreshSource } from '../hooks/useSources'
 import { Source } from '../types'
-import { Plus, Edit, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Edit, Trash2, ExternalLink, RefreshCw, Loader2 } from 'lucide-react'
 
 const Sources = () => {
   const { data: sources, isLoading, error } = useSources()
   const createSource = useCreateSource()
   const updateSource = useUpdateSource()
   const deleteSource = useDeleteSource()
+  const refreshSource = useRefreshSource()
   
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [editingSource, setEditingSource] = useState<Source | null>(null)
   const [deleteSourceId, setDeleteSourceId] = useState<string | null>(null)
+  const [refreshingId, setRefreshingId] = useState<string | null>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -72,6 +74,15 @@ const Sources = () => {
     updateSource.mutate({
       id: source.id,
       enabled: !source.enabled,
+    })
+  }
+
+  const handleRefresh = (id: string) => {
+    setRefreshingId(id)
+    refreshSource.mutate(id, {
+      onSettled: () => {
+        setRefreshingId(null)
+      }
     })
   }
 
@@ -134,6 +145,18 @@ const Sources = () => {
                   </div>
                 </div>
                 <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRefresh(source.id)}
+                    disabled={refreshingId === source.id}
+                  >
+                    {refreshingId === source.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

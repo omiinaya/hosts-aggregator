@@ -49,6 +49,8 @@ model HostEntry {
   @@index([enabled])
   @@index([lastSeen])
   @@index([sourceId])
+  @@index([sourceId, domain])
+  @@index([normalized, sourceId])
   @@map("host_entries")
 }
 
