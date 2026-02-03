@@ -83,7 +83,8 @@ export class HostsController {
         sources: host.sourceMappings.map(mapping => ({
           id: mapping.source.id,
           name: mapping.source.name,
-          enabled: mapping.source.enabled
+          enabled: mapping.source.enabled,
+          mappingEnabled: mapping.enabled
         }))
       }));
 
@@ -152,6 +153,7 @@ export class HostsController {
           name: mapping.source.name,
           type: mapping.source.type,
           enabled: mapping.source.enabled,
+          mappingEnabled: mapping.enabled,
           lineNumber: mapping.lineNumber,
           rawLine: mapping.rawLine,
           comment: mapping.comment
@@ -379,6 +381,116 @@ export class HostsController {
       });
     } catch (error) {
       logger.error('Failed to get host stats:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Toggle source-host mapping (enable/disable)
+   * PATCH /api/hosts/:hostId/sources/:sourceId
+   * 
+   * Request body: { enabled: boolean }
+   */
+  async toggleSourceHostMapping(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { hostId, sourceId } = req.params;
+      const { enabled } = req.body;
+
+      if (typeof enabled !== 'boolean') {
+        return next(createError('enabled must be a boolean', 400));
+      }
+
+      // Verify the mapping exists
+      const mapping = await prisma.sourceHostMapping.findUnique({
+        where: {
+          sourceId_hostEntryId: {
+            sourceId,
+            hostEntryId: hostId
+          }
+        }
+      });
+
+      if (!mapping) {
+        return next(createError('Source-host mapping not found', 404));
+      }
+
+      // Update the mapping
+      const updatedMapping = await prisma.sourceHostMapping.update({
+        where: {
+          sourceId_hostEntryId: {
+            sourceId,
+            hostEntryId: hostId
+          }
+        },
+        data: {
+          enabled
+        }
+      });
+
+      res.json({
+        status: 'success',
+        data: {
+          hostId,
+          sourceId,
+          enabled: updatedMapping.enabled
+        }
+      });
+    } catch (error) {
+      logger.error(`Failed to toggle source-host mapping for host ${req.params.hostId} and source ${req.params.sourceId}:`, error);
+      next(error);
+    }
+  }
+
+  /**
+   * Bulk update source-host mappings
+   * PATCH /api/hosts/:hostId/sources/bulk
+   * 
+   * Request body: { sourceIds: string[], enabled: boolean }
+   */
+  async bulkUpdateSourceHostMappings(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { hostId } = req.params;
+      const { sourceIds, enabled } = req.body;
+
+      if (!Array.isArray(sourceIds) || sourceIds.length === 0) {
+        return next(createError('sourceIds must be a non-empty array', 400));
+      }
+
+      if (typeof enabled !== 'boolean') {
+        return next(createError('enabled must be a boolean', 400));
+      }
+
+      // Verify the host exists
+      const host = await prisma.hostEntry.findUnique({
+        where: { id: hostId }
+      });
+
+      if (!host) {
+        return next(createError('Host not found', 404));
+      }
+
+      // Update all mappings in a single transaction
+      const result = await prisma.sourceHostMapping.updateMany({
+        where: {
+          hostEntryId: hostId,
+          sourceId: {
+            in: sourceIds
+          }
+        },
+        data: {
+          enabled
+        }
+      });
+
+      res.json({
+        status: 'success',
+        data: {
+          updated: result.count,
+          failed: sourceIds.length - result.count
+        }
+      });
+    } catch (error) {
+      logger.error(`Failed to bulk update source-host mappings for host ${req.params.hostId}:`, error);
       next(error);
     }
   }

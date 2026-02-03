@@ -15,6 +15,215 @@ import {
 } from '../hooks/useHosts'
 import { HostEntry, HostStats as HostStatsType, HostListParams } from '../types'
 import { Check, ChevronLeft, ChevronRight, Search, Power, PowerOff } from 'lucide-react'
+import { HostFilterProvider, useHostFilters, useHostFilterActions, HostFilters as HostFiltersType } from '../contexts/HostFilterContext'
+
+// ============================================================================
+// HOST STATS CARDS - Separate component that only re-renders when stats change
+// ============================================================================
+
+interface HostStatsCardsProps {
+  stats: HostStatsType | null | undefined
+}
+
+const HostStatsCards: React.FC<HostStatsCardsProps> = memo(({ stats }) => {
+  if (!stats) return null
+
+  return (
+    <>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Total Hosts</CardDescription>
+            <CardTitle className="text-3xl">{stats.total}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Enabled</CardDescription>
+            <CardTitle className="text-3xl text-green-600">{stats.enabled}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Disabled</CardDescription>
+            <CardTitle className="text-3xl text-red-600">{stats.disabled}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Entry Types</CardDescription>
+            <div className="flex gap-2 text-sm mt-2">
+              <span className="px-2 py-1 rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                Block: {stats.byEntryType.block}
+              </span>
+              <span className="px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                Allow: {stats.byEntryType.allow}
+              </span>
+              <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                Element: {stats.byEntryType.element}
+              </span>
+            </div>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Source Breakdown */}
+      {stats.bySource.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Hosts by Source</CardTitle>
+            <CardDescription>Number of hosts from each source</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {stats.bySource.map((source) => (
+                <div key={source.sourceId} className="text-sm">
+                  <div className="font-medium truncate" title={source.sourceName}>{source.sourceName}</div>
+                  <div className="text-muted-foreground">{source.hostCount} hosts</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </>
+  )
+})
+
+HostStatsCards.displayName = 'HostStatsCards'
+
+// ============================================================================
+// HOST FILTERS - Manages its own state, updates context on debounced changes
+// ============================================================================
+
+interface HostFiltersProps {
+  stats: HostStatsType | null | undefined
+}
+
+const HostFilters: React.FC<HostFiltersProps> = memo(({ stats }) => {
+  const { updateFilters } = useHostFilterActions()
+  
+  // Internal state for filters - this component maintains its own state
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
+  const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'block' | 'allow' | 'element'>('all')
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
+
+  // Debounce timeout ref
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounce search input
+  useEffect(() => {
+    const currentTimeout = searchTimeoutRef.current
+    
+    if (currentTimeout) {
+      clearTimeout(currentTimeout)
+    }
+
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 400)
+    
+    searchTimeoutRef.current = timeoutId
+
+    return () => {
+      if (searchTimeoutRef.current === timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [search])
+
+  // Update context when debounced search or filters change
+  useEffect(() => {
+    updateFilters({
+      search: debouncedSearch,
+      enabledFilter,
+      entryTypeFilter,
+      sourceFilter
+    })
+  }, [debouncedSearch, enabledFilter, entryTypeFilter, sourceFilter, updateFilters])
+
+  return (
+    <Card className="mb-6">
+      <CardContent className="p-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <Label htmlFor="search">Search</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="search"
+                placeholder="Search by domain..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                }}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          <div className="w-full md:w-48">
+            <Label htmlFor="enabled-filter">Status</Label>
+            <Select value={enabledFilter} onValueChange={(value: any) => {
+              setEnabledFilter(value)
+            }}>
+              <SelectTrigger id="enabled-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="enabled">Enabled</SelectItem>
+                <SelectItem value="disabled">Disabled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full md:w-48">
+            <Label htmlFor="entry-type-filter">Entry Type</Label>
+            <Select value={entryTypeFilter} onValueChange={(value: any) => {
+              setEntryTypeFilter(value)
+            }}>
+              <SelectTrigger id="entry-type-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="block">Block</SelectItem>
+                <SelectItem value="allow">Allow</SelectItem>
+                <SelectItem value="element">Element</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full md:w-48">
+            <Label htmlFor="source-filter">Source</Label>
+            <Select value={sourceFilter} onValueChange={(value) => {
+              setSourceFilter(value)
+            }}>
+              <SelectTrigger id="source-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                {stats?.bySource.map((source) => (
+                  <SelectItem key={source.sourceId} value={source.sourceId}>
+                    {source.sourceName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+})
+
+HostFilters.displayName = 'HostFilters'
+
+// ============================================================================
+// HOST TABLE - Only re-renders when its props change
+// ============================================================================
 
 interface HostTableProps {
   hosts: HostEntry[]
@@ -415,211 +624,12 @@ const HostTable: React.FC<HostTableProps> = memo(({
 
 HostTable.displayName = 'HostTable'
 
-interface HostFiltersProps {
-  stats: HostStatsType | null | undefined
-  onFiltersChange: (filters: {
-    search: string
-    enabledFilter: 'all' | 'enabled' | 'disabled'
-    entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
-    sourceFilter: string
-  }) => void
-}
+// ============================================================================
+// HOSTS DATA - Subscribes to context and fetches data
+// ============================================================================
 
-const HostFilters: React.FC<HostFiltersProps> = memo(({ stats, onFiltersChange }) => {
-  // Internal state for filters - this component maintains its own state
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
-  const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'block' | 'allow' | 'element'>('all')
-  const [sourceFilter, setSourceFilter] = useState<string>('all')
-
-  // Debounce timeout ref
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Debounce search input
-  useEffect(() => {
-    const currentTimeout = searchTimeoutRef.current
-    
-    if (currentTimeout) {
-      clearTimeout(currentTimeout)
-    }
-
-    const timeoutId = setTimeout(() => {
-      setDebouncedSearch(search)
-    }, 400)
-    
-    searchTimeoutRef.current = timeoutId
-
-    return () => {
-      if (searchTimeoutRef.current === timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
-  }, [search])
-
-  // Notify parent when debounced search or filters change
-  useEffect(() => {
-    onFiltersChange({
-      search: debouncedSearch,
-      enabledFilter,
-      entryTypeFilter,
-      sourceFilter
-    })
-  }, [debouncedSearch, enabledFilter, entryTypeFilter, sourceFilter, onFiltersChange])
-
-  return (
-    <>
-      {/* Statistics Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Total Hosts</CardDescription>
-              <CardTitle className="text-3xl">{stats.total}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Enabled</CardDescription>
-              <CardTitle className="text-3xl text-green-600">{stats.enabled}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Disabled</CardDescription>
-              <CardTitle className="text-3xl text-red-600">{stats.disabled}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Entry Types</CardDescription>
-              <div className="flex gap-2 text-sm mt-2">
-                <span className="px-2 py-1 rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                  Block: {stats.byEntryType.block}
-                </span>
-                <span className="px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                  Allow: {stats.byEntryType.allow}
-                </span>
-                <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                  Element: {stats.byEntryType.element}
-                </span>
-              </div>
-            </CardHeader>
-          </Card>
-        </div>
-      )}
-
-      {/* Source Breakdown */}
-      {stats && stats.bySource.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Hosts by Source</CardTitle>
-            <CardDescription>Number of hosts from each source</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {stats.bySource.map((source) => (
-                <div key={source.sourceId} className="text-sm">
-                  <div className="font-medium truncate" title={source.sourceName}>{source.sourceName}</div>
-                  <div className="text-muted-foreground">{source.hostCount} hosts</div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Filter Controls */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <Label htmlFor="search">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search"
-                  placeholder="Search by domain..."
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value)
-                  }}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="w-full md:w-48">
-              <Label htmlFor="enabled-filter">Status</Label>
-              <Select value={enabledFilter} onValueChange={(value: any) => {
-                setEnabledFilter(value)
-              }}>
-                <SelectTrigger id="enabled-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="enabled">Enabled</SelectItem>
-                  <SelectItem value="disabled">Disabled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full md:w-48">
-              <Label htmlFor="entry-type-filter">Entry Type</Label>
-              <Select value={entryTypeFilter} onValueChange={(value: any) => {
-                setEntryTypeFilter(value)
-              }}>
-                <SelectTrigger id="entry-type-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="block">Block</SelectItem>
-                  <SelectItem value="allow">Allow</SelectItem>
-                  <SelectItem value="element">Element</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full md:w-48">
-              <Label htmlFor="source-filter">Source</Label>
-              <Select value={sourceFilter} onValueChange={(value) => {
-                setSourceFilter(value)
-              }}>
-                <SelectTrigger id="source-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sources</SelectItem>
-                  {stats?.bySource.map((source) => (
-                    <SelectItem key={source.sourceId} value={source.sourceId}>
-                      {source.sourceName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  )
-})
-
-HostFilters.displayName = 'HostFilters'
-
-const Hosts = () => {
-  // Filter values received from HostFilters - only used for passing to HostTable
-  const [filters, setFilters] = useState<{
-    search: string
-    enabledFilter: 'all' | 'enabled' | 'disabled'
-    entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
-    sourceFilter: string
-  }>({
-    search: '',
-    enabledFilter: 'all',
-    entryTypeFilter: 'all',
-    sourceFilter: 'all'
-  })
-
+const HostsData: React.FC = () => {
+  const filters = useHostFilters()
   const [page, setPage] = useState(1)
   const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set())
 
@@ -656,27 +666,6 @@ const Hosts = () => {
       console.error('Failed to toggle host:', error)
     }
   }, [toggleHost, refetch])
-
-  // Handle filter changes from HostFilters - memoized to prevent infinite loop
-  const handleFiltersChange = useCallback((newFilters: {
-    search: string
-    enabledFilter: 'all' | 'enabled' | 'disabled'
-    entryTypeFilter: 'all' | 'block' | 'allow' | 'element'
-    sourceFilter: string
-  }) => {
-    setFilters(prev => {
-      // Only update if values have actually changed
-      if (
-        prev.search === newFilters.search &&
-        prev.enabledFilter === newFilters.enabledFilter &&
-        prev.entryTypeFilter === newFilters.entryTypeFilter &&
-        prev.sourceFilter === newFilters.sourceFilter
-      ) {
-        return prev // Return same reference to prevent re-render
-      }
-      return newFilters
-    })
-  }, [])
 
   if (hostsLoading || statsLoading) {
     return (
@@ -718,10 +707,13 @@ const Hosts = () => {
         <p className="text-muted-foreground">View and manage individual host entries</p>
       </div>
 
-      {/* HostFilters Component - maintains its own state */}
-      <HostFilters stats={stats} onFiltersChange={handleFiltersChange} />
+      {/* HostStatsCards - only re-renders when stats change */}
+      <HostStatsCards stats={stats} />
 
-      {/* HostTable Component - only this re-renders when data changes */}
+      {/* HostFilters - manages its own state, updates context */}
+      <HostFilters stats={stats} />
+
+      {/* HostTable - only re-renders when data changes */}
       <HostTable
         hosts={hostsData?.hosts || []}
         loading={hostsLoading}
@@ -737,6 +729,18 @@ const Hosts = () => {
         setPage={setPage}
       />
     </div>
+  )
+}
+
+// ============================================================================
+// MAIN HOSTS COMPONENT - Wraps with context provider
+// ============================================================================
+
+const Hosts = () => {
+  return (
+    <HostFilterProvider>
+      <HostsData />
+    </HostFilterProvider>
   )
 }
 

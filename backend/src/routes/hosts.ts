@@ -22,4 +22,10 @@ router.get('/:id', hostsController.getHostById.bind(hostsController));
 // PATCH /api/hosts/:id - Update host (enable/disable)
 router.patch('/:id', hostsController.updateHost.bind(hostsController));
 
+// PATCH /api/hosts/:hostId/sources/:sourceId - Toggle source-host mapping
+router.patch('/:hostId/sources/:sourceId', hostsController.toggleSourceHostMapping.bind(hostsController));
+
+// PATCH /api/hosts/:hostId/sources/bulk - Bulk update source-host mappings
+router.patch('/:hostId/sources/bulk', hostsController.bulkUpdateSourceHostMappings.bind(hostsController));
+
 export { router as hostsRouter };

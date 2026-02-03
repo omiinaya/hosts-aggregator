@@ -106,6 +106,7 @@ model SourceHostMapping {
   lineNumber  Int?     // Line number where this entry was found
   rawLine     String?  // The original line content (for debugging)
   comment     String?  // Any inline comment associated with this entry
+  enabled     Boolean  @default(true) // Whether this host is enabled from this source
   
   // Tracking
   firstSeen   DateTime @default(now())
@@ -118,6 +119,7 @@ model SourceHostMapping {
   @@unique([sourceId, hostEntryId])
   @@index([sourceId])
   @@index([hostEntryId])
+  @@index([enabled])
   @@index([firstSeen])
   @@map("source_host_mappings")
 }
