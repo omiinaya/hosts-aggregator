@@ -1,0 +1,12 @@
+[phases.build]
+cmds = [
+  "cd backend && npm ci --omit=dev",
+  "cd frontend && npm ci --omit=dev",
+  "npm run build"
+]
+
+[phases.start]
+cmds = ["cd backend && npm start"]
+
+[variables]
+NODE_ENV = "production"

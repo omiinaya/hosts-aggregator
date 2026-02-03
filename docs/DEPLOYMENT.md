@@ -5,8 +5,9 @@
 The Hosts Aggregator application can be deployed using several methods:
 
 1. **Docker Compose** (Recommended for production)
-2. **Manual Deployment** (For custom setups)
-3. **Cloud Platform Deployment** (AWS, Heroku, etc.)
+2. **Coolify** (Self-hosted PaaS)
+3. **Manual Deployment** (For custom setups)
+4. **Cloud Platform Deployment** (AWS, Heroku, etc.)
 
 ## Prerequisites
 
@@ -78,6 +79,134 @@ VITE_APP_VERSION=1.0.0
 # Database Configuration
 DB_VOLUME=/app/data
 ```
+
+## Coolify Deployment
+
+Coolify is a self-hosted PaaS that makes deployment easy. The project includes a [`nixpacks.toml`](nixpacks.toml:1) configuration file for seamless Coolify deployment.
+
+### Prerequisites
+
+- Coolify instance running (self-hosted or cloud)
+- Git repository with your code
+- Domain name configured (optional)
+
+### Deployment Steps
+
+1. **Connect your repository to Coolify:**
+   - Go to your Coolify dashboard
+   - Click "New Service" → "Git Repository"
+   - Connect your Git provider (GitHub, GitLab, etc.)
+   - Select the `hosts-aggregator` repository
+
+2. **Configure the service:**
+   - **Branch:** Select `main` (or your production branch)
+   - **Build Type:** Nixpacks (auto-detected)
+   - **Environment Variables:** Add required variables (see below)
+
+3. **Set environment variables:**
+   
+   Add these environment variables in Coolify:
+   
+   ```env
+   # Backend Configuration
+   NODE_ENV=production
+   PORT=3001
+   DATABASE_URL=file:./data/dev.db
+   CACHE_DIR=./data/cache
+   GENERATED_DIR=./data/generated
+   MAX_FILE_SIZE=10485760
+   ALLOWED_HOSTS=your-domain.com
+   LOG_LEVEL=info
+   
+   # Frontend Configuration
+   VITE_API_BASE_URL=https://your-domain.com/api
+   VITE_APP_NAME="Hosts Aggregator"
+   VITE_APP_VERSION=1.0.0
+   ```
+
+4. **Deploy:**
+   - Click "Deploy" in Coolify
+   - Coolify will automatically build and deploy your application
+   - Monitor the deployment logs for any issues
+
+### Coolify-Specific Configuration
+
+The [`nixpacks.toml`](nixpacks.toml:1) file handles the monorepo structure:
+
+```toml
+[phases.build]
+cmds = [
+  "cd backend && npm ci --omit=dev",
+  "cd frontend && npm ci --omit=dev",
+  "npm run build"
+]
+
+[phases.start]
+cmds = ["cd backend && npm start"]
+
+[variables]
+NODE_ENV = "production"
+```
+
+This configuration:
+- Installs dependencies in both backend and frontend
+- Builds both applications concurrently
+- Starts the backend server (which serves the frontend)
+
+### Troubleshooting Coolify Deployment
+
+**Build fails with "tsc: not found":**
+- Ensure [`nixpacks.toml`](nixpacks.toml:1) is present in the repository root
+- Check that `concurrently` is in `dependencies` (not `devDependencies`) in root [`package.json`](package.json:17)
+- Verify TypeScript is in `dependencies` for both backend and frontend
+
+**Application won't start:**
+- Check environment variables are set correctly
+- Verify database migrations have run
+- Check Coolify logs for specific error messages
+
+**Frontend not accessible:**
+- Ensure `VITE_API_BASE_URL` is set correctly
+- Check that the backend is serving the frontend static files
+- Verify the domain configuration in Coolify
+
+### Coolify Best Practices
+
+1. **Use persistent volumes** for data directories:
+   - Mount `/app/data` to persist database and generated files
+   - This ensures data survives container restarts
+
+2. **Set up health checks:**
+   - Configure health check endpoint: `/health`
+   - Set appropriate intervals and timeouts
+
+3. **Configure resource limits:**
+   - Set appropriate CPU and memory limits
+   - Monitor resource usage in Coolify dashboard
+
+4. **Enable automatic deployments:**
+   - Configure automatic deployments on push to main branch
+   - Use pull request previews for testing
+
+5. **Set up backups:**
+   - Configure regular backups of the database
+   - Backup generated hosts files
+
+### Coolify Environment Variables Reference
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `NODE_ENV` | Environment mode | `production` | Yes |
+| `PORT` | Backend port | `3001` | No |
+| `DATABASE_URL` | Database connection string | `file:./data/dev.db` | Yes |
+| `CACHE_DIR` | Cache directory path | `./data/cache` | No |
+| `GENERATED_DIR` | Generated files directory | `./data/generated` | No |
+| `MAX_FILE_SIZE` | Maximum upload file size (bytes) | `10485760` | No |
+| `ALLOWED_HOSTS` | Allowed hosts for CORS | `*` | No |
+| `LOG_LEVEL` | Logging level | `info` | No |
+| `VITE_API_BASE_URL` | Frontend API base URL | `/api` | Yes |
+| `VITE_APP_NAME` | Application name | `Hosts Aggregator` | No |
+| `VITE_APP_VERSION` | Application version | `1.0.0` | No |
 
 ## Manual Deployment
 

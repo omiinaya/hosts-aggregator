@@ -13,7 +13,7 @@
     "install:backend": "cd backend && npm install",
     "install:frontend": "cd frontend && npm install"
   },
-  "devDependencies": {
+  "dependencies": {
     "concurrently": "^8.2.2"
   },
   "keywords": ["adblocker", "hosts", "aggregation", "nodejs", "typescript", "react"],

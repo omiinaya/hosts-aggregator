@@ -145,7 +145,7 @@ const Hosts = () => {
 
       {/* Filters Component */}
       <HostsFilters
-        searchValue={params.search}
+        searchValue={params.search || ''}
         entryTypeValue={params.entryType || 'all'}
         enabledValue={
           params.enabled === undefined
