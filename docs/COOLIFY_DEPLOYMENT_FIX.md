@@ -44,8 +44,8 @@ Added explicit Nixpacks configuration to handle the monorepo:
 [phases.build]
 cmds = ["npm run build"]
 
-[phases.start]
-cmds = ["cd backend && npm start"]
+[start]
+cmd = "cd backend && npm start"
 
 [variables]
 NODE_ENV = "production"
@@ -53,8 +53,10 @@ NODE_ENV = "production"
 
 This configuration:
 - Builds both applications concurrently using the root `npm run build` script
-- Starts the backend server (which serves the frontend)
+- Sets the runtime start command to run the backend server
 - Nixpacks automatically handles dependency installation via `npm ci`
+
+**Important:** Use `[start]` (not `[phases.start]`) to set the runtime command. Using `[phases.start]` would incorrectly run the command during the Docker build phase instead of at runtime.
 
 ### 3. Fixed TypeScript Error
 
