@@ -1,9 +1,5 @@
 [phases.build]
-cmds = [
-  "cd backend && npm ci --omit=dev",
-  "cd frontend && npm ci --omit=dev",
-  "npm run build"
-]
+cmds = ["npm run build"]
 
 [phases.start]
 cmds = ["cd backend && npm start"]

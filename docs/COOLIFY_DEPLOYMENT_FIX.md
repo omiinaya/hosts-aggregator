@@ -42,11 +42,7 @@ Added explicit Nixpacks configuration to handle the monorepo:
 
 ```toml
 [phases.build]
-cmds = [
-  "cd backend && npm ci --omit=dev",
-  "cd frontend && npm ci --omit=dev",
-  "npm run build"
-]
+cmds = ["npm run build"]
 
 [phases.start]
 cmds = ["cd backend && npm start"]
@@ -56,9 +52,9 @@ NODE_ENV = "production"
 ```
 
 This configuration:
-- Installs dependencies in both backend and frontend directories
 - Builds both applications concurrently using the root `npm run build` script
 - Starts the backend server (which serves the frontend)
+- Nixpacks automatically handles dependency installation via `npm ci`
 
 ### 3. Fixed TypeScript Error
 
