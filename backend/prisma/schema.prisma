@@ -21,7 +21,7 @@ model Source {
   aggregationSources AggregationSource[]
   contentCache       SourceContent?
   fetchLogs          SourceFetchLog[]
-  hostMappings       SourceHostMapping[]
+  hosts              HostEntry[]
 
   @@index([enabled])
   @@index([type])
@@ -30,21 +30,25 @@ model Source {
 
 model HostEntry {
   id               String              @id @default(cuid())
-  domain           String              @unique
-  normalized       String              @unique
+  domain           String
+  normalized       String
   entryType        String              @default("block")
   enabled          Boolean             @default(true)
   firstSeen        DateTime            @default(now())
   lastSeen         DateTime            @updatedAt
   occurrenceCount  Int                 @default(1)
+  sourceId         String?
+  source           Source?             @relation(fields: [sourceId], references: [id])
   aggregationHosts AggregationHost[]
   sourceMappings   SourceHostMapping[]
 
+  @@unique([domain, sourceId])
   @@index([domain])
   @@index([normalized])
   @@index([entryType])
   @@index([enabled])
   @@index([lastSeen])
+  @@index([sourceId])
   @@map("host_entries")
 }
 
@@ -59,7 +63,6 @@ model SourceHostMapping {
   firstSeen   DateTime  @default(now())
   lastSeen    DateTime  @updatedAt
   hostEntry   HostEntry @relation(fields: [hostEntryId], references: [id], onDelete: Cascade)
-  source      Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
   @@unique([sourceId, hostEntryId])
   @@index([sourceId])

@@ -52,15 +52,17 @@ export interface HostEntry {
   occurrenceCount: number
   firstSeen: string
   lastSeen: string
-  sources: HostSource[]
+  sourceId: string | null  // NEW: optional source tracking
+  source?: HostSource | null  // NEW: optional source relation
+  sources: HostSource[]  // Kept for backward compatibility with API response
 }
 
 export interface HostSource {
   id: string
   name: string
-  type: string
+  type?: string
   enabled: boolean
-  mappingEnabled: boolean
+  mappingEnabled?: boolean
   lineNumber?: number
   rawLine?: string
   comment?: string

@@ -24,7 +24,7 @@ export class SourcesController {
         include: {
           _count: {
             select: {
-              hostMappings: true
+              hosts: true
             }
           },
           contentCache: {
@@ -49,7 +49,7 @@ export class SourcesController {
         data: sources.map(source => ({
           ...source,
           metadata: source.metadata ? JSON.parse(source.metadata) : null,
-          hostCount: source._count.hostMappings,
+          hostCount: source._count.hosts,
           lastFetched: source.contentCache?.fetchedAt || null,
           lastFetchStatus: source.fetchLogs[0]?.status || null,
           entryCount: source.contentCache?.entryCount || 0,
@@ -73,7 +73,7 @@ export class SourcesController {
         include: {
           _count: {
             select: {
-              hostMappings: true
+              hosts: true
             }
           },
           contentCache: {
@@ -96,14 +96,10 @@ export class SourcesController {
               fetchedAt: true
             }
           },
-          hostMappings: {
-            include: {
-              hostEntry: {
-                select: {
-                  domain: true,
-                  entryType: true
-                }
-              }
+          hosts: {
+            select: {
+              domain: true,
+              entryType: true
             },
             take: 100
           }
@@ -119,7 +115,7 @@ export class SourcesController {
         data: {
           ...source,
           metadata: source.metadata ? JSON.parse(source.metadata) : null,
-          hostCount: source._count.hostMappings,
+          hostCount: source._count.hosts,
           lastFetched: source.contentCache?.fetchedAt || null,
           lastFetchStatus: source.fetchLogs[0]?.status || null,
           entryCount: source.contentCache?.entryCount || 0,
@@ -272,7 +268,7 @@ export class SourcesController {
         return next(createError('Source not found', 404));
       }
 
-      // Cascade delete will handle related records (contentCache, hostMappings, fetchLogs)
+      // Cascade delete will handle related records (contentCache, hosts, fetchLogs)
       await prisma.source.delete({
         where: { id }
       });

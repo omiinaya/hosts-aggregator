@@ -144,7 +144,8 @@ export class AggregationService {
 
       for (const domain of result.blockedDomains) {
         try {
-          const hostEntry = await prisma.hostEntry.findUnique({
+          // Use findFirst since normalized is no longer unique (just indexed)
+          const hostEntry = await prisma.hostEntry.findFirst({
             where: { normalized: domain.toLowerCase() }
           });
 
@@ -402,21 +403,40 @@ export class AggregationService {
   }
 
   private async storeSourceEntries(sourceId: string, entries: ParsedEntry[]): Promise<void> {
+    // Check if source still exists (safety check to avoid foreign key violations)
+    const source = await prisma.source.findUnique({
+      where: { id: sourceId },
+      select: { id: true }
+    });
+
+    if (!source) {
+      logger.warn(`Source ${sourceId} not found, skipping entries`);
+      return;
+    }
+
     // Update entry count in source content
     await prisma.sourceContent.updateMany({
       where: { sourceId },
       data: { entryCount: entries.length }
     });
 
-    // Process each entry and create host mappings
+    // Process each entry directly with sourceId on HostEntry
     for (const entry of entries) {
       const normalized = entry.domain.toLowerCase().trim();
 
       try {
-        // Upsert host entry
-        const hostEntry = await prisma.hostEntry.upsert({
-          where: { normalized },
+        // Upsert host entry using composite unique constraint: domain + sourceId
+        // Note: normalized is not updated on upsert to avoid P2002 violations when
+        // multiple sources share the same domain (same normalized value)
+        await prisma.hostEntry.upsert({
+          where: {
+            domain_sourceId: {
+              domain: entry.domain,
+              sourceId
+            }
+          },
           update: {
+            entryType: entry.type,
             lastSeen: new Date(),
             occurrenceCount: { increment: 1 }
           },
@@ -424,40 +444,19 @@ export class AggregationService {
             domain: entry.domain,
             normalized,
             entryType: entry.type,
+            sourceId,
             firstSeen: new Date(),
             lastSeen: new Date(),
             occurrenceCount: 1
           }
         });
-
-        // Create or update source-host mapping
-        await prisma.sourceHostMapping.upsert({
-          where: {
-            sourceId_hostEntryId: {
-              sourceId,
-              hostEntryId: hostEntry.id
-            }
-          },
-          update: {
-            lastSeen: new Date(),
-            lineNumber: entry.lineNumber,
-            rawLine: entry.comment || null
-          },
-          create: {
-            sourceId,
-            hostEntryId: hostEntry.id,
-            lineNumber: entry.lineNumber,
-            rawLine: entry.comment || null,
-            comment: entry.comment || null,
-            firstSeen: new Date(),
-            lastSeen: new Date()
-          }
-        });
       } catch (error) {
-        // Log but don't fail - source might have been deleted
+        // Log but don't fail - source might have been deleted during processing
         logger.warn(`Could not store entry for domain ${entry.domain}:`, error);
       }
     }
+
+    logger.info(`Stored ${entries.length} entries for source ${sourceId}`);
   }
 
   private async logSourceFetch(
