@@ -1,18 +1,3 @@
-// ============================================================================
-// Hosts-Aggregator Database Schema
-// ============================================================================
-// This schema implements a database-first approach that completely eliminates
-// file-based caching. All host entries and their source relationships are
-// stored in the database with proper tracking and cascade deletion.
-//
-// Key Design Decisions:
-// 1. HostEntry table stores individual domains with unique constraints
-// 2. SourceHostMapping enables many-to-many relationships with metadata
-// 3. SourceContent table replaces file-based caching entirely
-// 4. AggregationResult tracks per-source statistics
-// 5. All relationships use proper cascade deletes for data integrity
-// ============================================================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -22,99 +7,59 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================================================
-// Source Model
-// ============================================================================
-// Represents a hosts file source (URL or FILE type).
-// Simplified from previous version - fetch state moved to SourceFetchLog.
-// ============================================================================
 model Source {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  url         String?   // For URL-type sources
-  filePath    String?   // For FILE-type sources (original upload path)
-  type        String    // 'URL' | 'FILE'
-  enabled     Boolean   @default(true)
-  metadata    String?   // JSON string for additional metadata
-  format      String?   @default("auto") // 'standard' | 'adblock' | 'auto'
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relationships
-  // Host entries discovered from this source
-  hostMappings SourceHostMapping[]
-  
-  // Content cache - replaces file-based caching
-  contentCache SourceContent?
-  
-  // Fetch history for this source
-  fetchLogs    SourceFetchLog[]
-  
-  // Aggregation results this source participated in
+  id                 String              @id @default(cuid())
+  name               String              @unique
+  url                String?
+  filePath           String?
+  type               String
+  enabled            Boolean             @default(true)
+  metadata           String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  format             String?             @default("auto")
   aggregationSources AggregationSource[]
+  contentCache       SourceContent?
+  fetchLogs          SourceFetchLog[]
+  hostMappings       SourceHostMapping[]
 
-  @@map("sources")
   @@index([enabled])
   @@index([type])
+  @@map("sources")
 }
 
-// ============================================================================
-// HostEntry Model
-// ============================================================================
-// Stores unique host entries (domains) discovered from sources.
-// Each domain is stored once, with source relationships tracked via
-// SourceHostMapping.
-// ============================================================================
 model HostEntry {
-  id          String   @id @default(cuid())
-  domain      String   @unique // The actual domain (e.g., "ads.example.com")
-  normalized  String   @unique // Lowercase, trimmed version for deduplication
-  entryType   String   @default("block") // 'block' | 'allow' | 'element'
-  enabled     Boolean  @default(true) // Whether this host entry is enabled/disabled
-  firstSeen   DateTime @default(now())
-  lastSeen    DateTime @updatedAt
-  occurrenceCount Int @default(1) // How many times this domain has been seen
-
-  // Relationships
-  // Sources that contain this host
-  sourceMappings SourceHostMapping[]
-  
-  // Aggregation results that included this host
+  id               String              @id @default(cuid())
+  domain           String              @unique
+  normalized       String              @unique
+  entryType        String              @default("block")
+  enabled          Boolean             @default(true)
+  firstSeen        DateTime            @default(now())
+  lastSeen         DateTime            @updatedAt
+  occurrenceCount  Int                 @default(1)
   aggregationHosts AggregationHost[]
+  sourceMappings   SourceHostMapping[]
 
-  @@map("host_entries")
   @@index([domain])
   @@index([normalized])
   @@index([entryType])
   @@index([enabled])
   @@index([lastSeen])
+  @@map("host_entries")
 }
 
-// ============================================================================
-// SourceHostMapping Model
-// ============================================================================
-// Many-to-many relationship table linking Sources to HostEntries.
-// Tracks which hosts came from which sources with metadata about
-// when and how they were discovered.
-// ============================================================================
 model SourceHostMapping {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   sourceId    String
   hostEntryId String
-  
-  // Context from the original hosts file
-  lineNumber  Int?     // Line number where this entry was found
-  rawLine     String?  // The original line content (for debugging)
-  comment     String?  // Any inline comment associated with this entry
-  enabled     Boolean  @default(true) // Whether this host is enabled from this source
-  
-  // Tracking
-  firstSeen   DateTime @default(now())
-  lastSeen    DateTime @updatedAt
-  
-  // Relationships
-  source    Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  hostEntry HostEntry @relation(fields: [hostEntryId], references: [id], onDelete: Cascade)
+  lineNumber  Int?
+  rawLine     String?
+  comment     String?
+  enabled     Boolean   @default(true)
+  firstSeen   DateTime  @default(now())
+  lastSeen    DateTime  @updatedAt
+  hostEntry   HostEntry @relation(fields: [hostEntryId], references: [id], onDelete: Cascade)
+  source      Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
   @@unique([sourceId, hostEntryId])
   @@index([sourceId])
@@ -124,135 +69,74 @@ model SourceHostMapping {
   @@map("source_host_mappings")
 }
 
-// ============================================================================
-// SourceContent Model
-// ============================================================================
-// Replaces file-based caching entirely. Stores the raw content
-// fetched from URL sources or uploaded file content.
-// One-to-one relationship with Source.
-// ============================================================================
 model SourceContent {
   id          String   @id @default(cuid())
   sourceId    String   @unique
-  
-  // Content storage
-  content     String   // Raw hosts file content
-  contentHash String   // SHA256 hash for change detection
-  
-  // Metadata
+  content     String
+  contentHash String
   lineCount   Int      @default(0)
-  entryCount  Int      @default(0) // Parsed entries count
-  format      String?  // Detected format: 'standard' | 'adblock'
-  
-  // Timestamps
+  entryCount  Int      @default(0)
   fetchedAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  // Relationships
-  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  format      String?
+  source      Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
-  @@map("source_contents")
   @@index([contentHash])
   @@index([fetchedAt])
+  @@map("source_contents")
 }
 
-// ============================================================================
-// SourceFetchLog Model
-// ============================================================================
-// Tracks all fetch attempts for URL sources.
-// Replaces the lastFetched and lastFetchStatus fields from the old schema.
-// Provides full audit history of fetch operations.
-// ============================================================================
 model SourceFetchLog {
-  id          String   @id @default(cuid())
-  sourceId    String
-  
-  // Fetch result
-  status      String   // 'SUCCESS' | 'ERROR' | 'TIMEOUT' | 'NOT_MODIFIED'
-  httpStatus  Int?     // HTTP status code (for URL sources)
-  
-  // Details
-  errorMessage String? // Error details if status is ERROR
-  responseTimeMs Int?  // How long the fetch took
-  contentChanged Boolean @default(false) // Whether content changed from previous fetch
-  
-  // Content reference (if successful)
-  contentId   String?  // Reference to SourceContent if fetch succeeded
-  
-  // Timestamps
-  fetchedAt   DateTime @default(now())
-  
-  // Relationships
-  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  sourceId       String
+  status         String
+  httpStatus     Int?
+  errorMessage   String?
+  responseTimeMs Int?
+  contentChanged Boolean  @default(false)
+  contentId      String?
+  fetchedAt      DateTime @default(now())
+  source         Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
-  @@map("source_fetch_logs")
   @@index([sourceId])
   @@index([status])
   @@index([fetchedAt])
+  @@map("source_fetch_logs")
 }
 
-// ============================================================================
-// AggregationResult Model
-// ============================================================================
-// Tracks aggregation runs with detailed statistics.
-// Enhanced to include per-source breakdown and host-level tracking.
-// ============================================================================
 model AggregationResult {
-  id          String   @id @default(cuid())
-  
-  // Overall statistics
-  timestamp   DateTime @default(now())
-  totalSources Int     // Number of sources processed
-  successfulSources Int @default(0) // Sources that were successfully fetched
-  failedSources Int   @default(0)   // Sources that failed
-  
-  // Entry statistics
-  totalEntries Int    // Total entries before deduplication
-  uniqueEntries Int   // Unique domains after deduplication
-  duplicatesRemoved Int // Number of duplicates removed
-  allowEntries Int    @default(0) // Number of allow-list entries
-  blockEntries Int    @default(0) // Number of block-list entries
-  
-  // Processing metadata
-  processingTimeMs Int // How long aggregation took
-  triggeredBy String   @default("manual") // 'manual' | 'scheduled' | 'auto' | 'webhook'
-  
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Relationships
-  // Sources that participated in this aggregation
-  sources AggregationSource[]
-  
-  // Individual hosts included in this aggregation
-  hosts AggregationHost[]
+  id                String              @id @default(cuid())
+  timestamp         DateTime            @default(now())
+  totalSources      Int
+  successfulSources Int                 @default(0)
+  failedSources     Int                 @default(0)
+  totalEntries      Int
+  uniqueEntries     Int
+  duplicatesRemoved Int
+  allowEntries      Int                 @default(0)
+  blockEntries      Int                 @default(0)
+  processingTimeMs  Int
+  triggeredBy       String              @default("manual")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  hosts             AggregationHost[]
+  sources           AggregationSource[]
 
-  @@map("aggregation_results")
   @@index([timestamp])
   @@index([createdAt])
+  @@map("aggregation_results")
 }
 
-// ============================================================================
-// AggregationSource Model
-// ============================================================================
-// Junction table linking AggregationResults to Sources.
-// Tracks per-source statistics for each aggregation run.
-// ============================================================================
 model AggregationSource {
-  id          String   @id @default(cuid())
-  aggregationResultId String
-  sourceId    String
-  
-  // Per-source statistics
-  entriesContributed Int @default(0) // How many entries this source contributed
-  uniqueDomainsContributed Int @default(0) // Unique domains from this source
-  fetchStatus String   // 'SUCCESS' | 'ERROR' | 'CACHED' | 'SKIPPED'
-  fetchDurationMs Int? // How long fetching this source took
-  
-  // Relationships
-  aggregationResult AggregationResult @relation(fields: [aggregationResultId], references: [id], onDelete: Cascade)
-  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  id                       String            @id @default(cuid())
+  aggregationResultId      String
+  sourceId                 String
+  entriesContributed       Int               @default(0)
+  uniqueDomainsContributed Int               @default(0)
+  fetchStatus              String
+  fetchDurationMs          Int?
+  source                   Source            @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  aggregationResult        AggregationResult @relation(fields: [aggregationResultId], references: [id], onDelete: Cascade)
 
   @@unique([aggregationResultId, sourceId])
   @@index([aggregationResultId])
@@ -260,24 +144,14 @@ model AggregationSource {
   @@map("aggregation_sources")
 }
 
-// ============================================================================
-// AggregationHost Model
-// ============================================================================
-// Junction table linking AggregationResults to HostEntries.
-// Tracks which hosts were included in each aggregation and from which sources.
-// ============================================================================
 model AggregationHost {
-  id          String   @id @default(cuid())
+  id                  String            @id @default(cuid())
   aggregationResultId String
-  hostEntryId String
-  
-  // Source attribution
-  sourceIds   String   // JSON array of source IDs that contributed this host
-  primarySourceId String // The first source that contributed this host
-  
-  // Relationships
-  aggregationResult AggregationResult @relation(fields: [aggregationResultId], references: [id], onDelete: Cascade)
-  hostEntry HostEntry @relation(fields: [hostEntryId], references: [id], onDelete: Cascade)
+  hostEntryId         String
+  sourceIds           String
+  primarySourceId     String
+  hostEntry           HostEntry         @relation(fields: [hostEntryId], references: [id], onDelete: Cascade)
+  aggregationResult   AggregationResult @relation(fields: [aggregationResultId], references: [id], onDelete: Cascade)
 
   @@unique([aggregationResultId, hostEntryId])
   @@index([aggregationResultId])
@@ -285,22 +159,3 @@ model AggregationHost {
   @@index([primarySourceId])
   @@map("aggregation_hosts")
 }
-
-// ============================================================================
-// Schema Migration Notes
-// ============================================================================
-// When migrating from the old schema:
-//
-// 1. Source table: Remove entryCount, lastFetched, lastFetchStatus, lastChecked
-// 2. Create HostEntry table and populate from existing cache files
-// 3. Create SourceHostMapping for each source-host relationship
-// 4. Migrate cache files to SourceContent table
-// 5. Create SourceFetchLog entries from existing source metadata
-// 6. Update AggregationResult with new fields
-// 7. Create AggregationSource and AggregationHost junction tables
-//
-// Data Integrity:
-// - All cascade deletes ensure no orphaned records
-// - Unique constraints prevent duplicate entries
-// - Indexes optimize common query patterns
-// ============================================================================

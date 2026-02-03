@@ -60,6 +60,7 @@ export interface HostSource {
   name: string
   type: string
   enabled: boolean
+  mappingEnabled: boolean
   lineNumber?: number
   rawLine?: string
   comment?: string
@@ -111,4 +112,13 @@ export interface BulkToggleHostsRequest {
 
 export interface UpdateHostRequest {
   enabled?: boolean
+}
+
+export interface ToggleSourceHostMappingRequest {
+  enabled: boolean
+}
+
+export interface BulkUpdateSourceHostMappingsRequest {
+  sourceIds: string[]
+  enabled: boolean
 }

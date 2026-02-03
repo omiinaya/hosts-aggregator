@@ -4,11 +4,9 @@ import { Button } from '../ui/button'
 import { cn } from '../../lib/utils'
 import {
   Home,
+  Globe,
   Database,
-  Download,
   Settings,
-  FileText,
-  List,
 } from 'lucide-react'
 
 interface MainLayoutProps {
@@ -17,8 +15,8 @@ interface MainLayoutProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Hosts', href: '/hosts', icon: Globe },
   { name: 'Sources', href: '/sources', icon: Database },
-  { name: 'Hosts', href: '/hosts', icon: List },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
