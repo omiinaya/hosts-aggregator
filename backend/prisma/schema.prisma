@@ -164,3 +164,20 @@ model AggregationHost {
   @@index([primarySourceId])
   @@map("aggregation_hosts")
 }
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          String    @default("viewer")
+  apiKey        String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  @@index([email])
+  @@index([role])
+  @@index([apiKey])
+  @@map("users")
+}
