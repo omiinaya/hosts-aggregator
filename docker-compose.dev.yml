@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      target: builder
+    container_name: hosts-aggregator-backend-dev
+    ports:
+      - "3010:3010"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:./dev.db
+      - PORT=3010
+      - LOG_LEVEL=debug
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: builder
+    container_name: hosts-aggregator-frontend-dev
+    ports:
+      - "3011:3011"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3010/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+    restart: unless-stopped
