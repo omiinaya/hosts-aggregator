@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: hosts-aggregator-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
   backend:
     build:
       context: ./backend
@@ -11,12 +25,15 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=file:./dev.db
+      - REDIS_URL=redis://redis:6379
       - PORT=3010
       - LOG_LEVEL=debug
     volumes:
       - ./backend:/app
       - /app/node_modules
     command: npm run dev
+    depends_on:
+      - redis
     restart: unless-stopped
 
   frontend:
@@ -33,3 +50,6 @@ services:
       - /app/node_modules
     command: npm run dev
     restart: unless-stopped
+
+volumes:
+  redis-data:
