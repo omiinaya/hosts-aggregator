@@ -29,10 +29,17 @@ logs/
 .parcel-cache/
 
 # IDE files
-.vscode/
 .idea/
 *.swp
 *.swo
+
+# VS Code - allow shared settings
+!.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # OS files
 .DS_Store
