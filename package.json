@@ -11,12 +11,43 @@
     "build:frontend": "cd frontend && npm run build",
     "install:all": "concurrently \"npm run install:backend\" \"npm run install:frontend\"",
     "install:backend": "cd backend && npm install",
-    "install:frontend": "cd frontend && npm install"
+    "install:frontend": "cd frontend && npm install",
+    "test": "concurrently \"npm run test:backend\" \"npm run test:frontend\"",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "lint": "concurrently \"npm run lint:backend\" \"npm run lint:frontend\"",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd frontend && npm run lint",
+    "type-check": "concurrently \"npm run type-check:backend\" \"npm run type-check:frontend\"",
+    "type-check:backend": "cd backend && npm run type-check",
+    "type-check:frontend": "cd frontend && npm run type-check",
+    "prepare": "husky"
   },
   "dependencies": {
     "concurrently": "^8.2.2"
   },
-  "keywords": ["adblocker", "hosts", "aggregation", "nodejs", "typescript", "react"],
+  "keywords": [
+    "adblocker",
+    "hosts",
+    "aggregation",
+    "nodejs",
+    "typescript",
+    "react"
+  ],
   "author": "Hosts Aggregator Team",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7"
+  },
+  "lint-staged": {
+    "backend/src/**/*.ts": [
+      "bash -c 'cd backend && npm run type-check'",
+      "bash -c 'cd backend && npm run lint'"
+    ],
+    "frontend/src/**/*.{ts,tsx}": [
+      "bash -c 'cd frontend && npm run type-check'",
+      "bash -c 'cd frontend && npm run lint'"
+    ]
+  }
 }
