@@ -24,7 +24,7 @@ export const useCreateSource = () => {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: async (source: CreateSourceRequest): Promise<Source> => {
+    mutationFn: async (source: CreateSourceRequest): Promise<{ source: Source; aggregation?: { success: boolean; error?: string; entriesProcessed?: number } }> => {
       const response = await fetch(`${API_BASE_URL}/sources`, {
         method: 'POST',
         headers: {
@@ -39,11 +39,24 @@ export const useCreateSource = () => {
       }
       
       const data = await response.json()
-      return data.data
+      return {
+        source: data.data,
+        aggregation: data.aggregation
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['sources'] })
-      toast.success('Source created successfully')
+      queryClient.invalidateQueries({ queryKey: ['hosts'] })
+      
+      if (data.aggregation) {
+        if (data.aggregation.success) {
+          toast.success(`Source created successfully. ${data.aggregation.entriesProcessed || 0} hosts aggregated.`)
+        } else {
+          toast.error(data.aggregation.error || 'Source created but aggregation failed')
+        }
+      } else {
+        toast.success('Source created successfully')
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message)

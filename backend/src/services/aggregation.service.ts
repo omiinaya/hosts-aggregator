@@ -433,38 +433,71 @@ export class AggregationService {
       return;
     }
 
-    // Use transaction for atomic batch operations
-    await prisma.$transaction(async (tx) => {
-      // Batch upsert all entries in parallel
-      const upsertPromises = entries.map(entry =>
-        tx.hostEntry.upsert({
-          where: {
-            domain_sourceId: {
-              domain: entry.domain,
-              sourceId
-            }
+    // Process entries in batches to avoid transaction timeout
+    // Large sources like big.oisd.nl (~215,000 entries) need this approach
+    const BATCH_SIZE = 1000;
+    const totalBatches = Math.ceil(entries.length / BATCH_SIZE);
+    let totalStored = 0;
+    let failedBatches = 0;
+
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+      const batch = entries.slice(i, i + BATCH_SIZE);
+      const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+
+      try {
+        // Use transaction for each batch with extended timeout
+        await prisma.$transaction(
+          async (tx) => {
+            // Batch upsert all entries in parallel within the batch
+            const upsertPromises = batch.map(entry =>
+              tx.hostEntry.upsert({
+                where: {
+                  domain_sourceId: {
+                    domain: entry.domain,
+                    sourceId
+                  }
+                },
+                update: {
+                  entryType: entry.type,
+                  lastSeen: new Date(),
+                  occurrenceCount: { increment: 1 }
+                },
+                create: {
+                  domain: entry.domain,
+                  normalized: entry.domain.toLowerCase().trim(),
+                  entryType: entry.type,
+                  sourceId,
+                  firstSeen: new Date(),
+                  lastSeen: new Date(),
+                  occurrenceCount: 1
+                }
+              })
+            );
+
+            await Promise.all(upsertPromises);
           },
-          update: {
-            entryType: entry.type,
-            lastSeen: new Date(),
-            occurrenceCount: { increment: 1 }
-          },
-          create: {
-            domain: entry.domain,
-            normalized: entry.domain.toLowerCase().trim(),
-            entryType: entry.type,
-            sourceId,
-            firstSeen: new Date(),
-            lastSeen: new Date(),
-            occurrenceCount: 1
-          }
-        })
+          { timeout: 60000 } // 60 second timeout per batch
+        );
+
+        totalStored += batch.length;
+        if (totalBatches > 1) {
+          logger.debug(`Processed batch ${batchNumber}/${totalBatches} (${batch.length} entries) for source ${sourceId}`);
+        }
+      } catch (error) {
+        failedBatches++;
+        logger.error(`Failed to process batch ${batchNumber}/${totalBatches} for source ${sourceId}:`, error);
+        // Continue with next batch even if this one fails
+      }
+    }
+
+    if (failedBatches > 0) {
+      logger.warn(
+        `Source ${sourceId}: Stored ${totalStored}/${entries.length} entries ` +
+        `(${failedBatches}/${totalBatches} batches failed)`
       );
-
-      await Promise.all(upsertPromises);
-    });
-
-    logger.info(`Stored ${entries.length} entries for source ${sourceId}`);
+    } else {
+      logger.info(`Stored ${totalStored} entries for source ${sourceId}`);
+    }
   }
 
   private async logSourceFetch(

@@ -4,10 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import { Progress } from '../components/ui/progress'
 import { Switch } from '../components/ui/switch'
 import { useSources, useCreateSource, useUpdateSource, useDeleteSource, useRefreshSource } from '../hooks/useSources'
 import { Source } from '../types'
-import { Plus, Edit, Trash2, ExternalLink, RefreshCw, Loader2 } from 'lucide-react'
+import { Plus, Edit, Trash2, ExternalLink, RefreshCw, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+
+const ITEMS_PER_PAGE = 10
 
 const Sources = () => {
   const { data: sources, isLoading, error } = useSources()
@@ -15,12 +18,12 @@ const Sources = () => {
   const updateSource = useUpdateSource()
   const deleteSource = useDeleteSource()
   const refreshSource = useRefreshSource()
-  
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [editingSource, setEditingSource] = useState<Source | null>(null)
   const [deleteSourceId, setDeleteSourceId] = useState<string | null>(null)
   const [refreshingId, setRefreshingId] = useState<string | null>(null)
-  
+
   const [formData, setFormData] = useState({
     name: '',
     url: '',
@@ -33,6 +36,9 @@ const Sources = () => {
       onSuccess: () => {
         setIsCreateDialogOpen(false)
         setFormData({ name: '', url: '', enabled: true })
+      },
+      onError: () => {
+        // Error is handled by toast in the hook
       }
     })
   }
@@ -80,6 +86,12 @@ const Sources = () => {
   const handleRefresh = (id: string) => {
     setRefreshingId(id)
     refreshSource.mutate(id, {
+      onSuccess: () => {
+        // Success is handled by toast in the hook
+      },
+      onError: () => {
+        // Error is handled by toast in the hook
+      },
       onSettled: () => {
         setRefreshingId(null)
       }
@@ -128,7 +140,7 @@ const Sources = () => {
 
       <div className="grid gap-4">
         {sources?.map((source) => (
-          <Card key={source.id}>
+          <Card key={source.id} className={source.enabled ? '' : 'opacity-75'}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
@@ -137,11 +149,32 @@ const Sources = () => {
                     onCheckedChange={() => handleToggleEnabled(source)}
                   />
                   <div>
-                    <h3 className="font-semibold">{source.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{source.name}</h3>
+                      {source.hostCount != null && source.hostCount > 0 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">
+                          {source.hostCount} hosts
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">{source.url}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Last checked: {source.lastChecked ? new Date(source.lastChecked).toLocaleDateString() : 'Never'}
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-xs text-muted-foreground">
+                        Last checked: {source.lastChecked ? new Date(source.lastChecked).toLocaleDateString() : 'Never'}
+                      </p>
+                      {source.lastFetchStatus === 'ERROR' && (
+                        <span className="inline-flex items-center text-xs text-red-600">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          Failed
+                        </span>
+                      )}
+                      {source.lastFetchStatus === 'SUCCESS' && (
+                        <span className="inline-flex items-center text-xs text-green-600">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          OK
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex space-x-2">
@@ -150,6 +183,7 @@ const Sources = () => {
                     size="sm"
                     onClick={() => handleRefresh(source.id)}
                     disabled={refreshingId === source.id}
+                    title="Refresh and aggregate hosts from this source"
                   >
                     {refreshingId === source.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -161,6 +195,7 @@ const Sources = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => handleEdit(source)}
+                    title="Edit source"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
@@ -168,10 +203,11 @@ const Sources = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setDeleteSourceId(source.id)}
+                    title="Delete source"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                  <a href={source.url} target="_blank" rel="noopener noreferrer">
+                  <a href={source.url} target="_blank" rel="noopener noreferrer" title="Open source URL">
                     <Button
                       variant="outline"
                       size="sm"
@@ -189,7 +225,7 @@ const Sources = () => {
           <Card>
             <CardContent className="p-6 text-center">
               <p className="text-muted-foreground">No sources configured yet.</p>
-              <Button 
+              <Button
                 onClick={() => setIsCreateDialogOpen(true)}
                 className="mt-4"
               >
@@ -200,6 +236,16 @@ const Sources = () => {
           </Card>
         )}
       </div>
+
+      {/* Loading Progress Bar for Create/Delete Operations */}
+      {(createSource.isPending || deleteSource.isPending) && (
+        <div className="mt-4">
+          <Progress value={undefined} className="animate-pulse" />
+          <p className="text-sm text-muted-foreground mt-2 text-center">
+            {createSource.isPending ? 'Creating source...' : 'Deleting source...'}
+          </p>
+        </div>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={isCreateDialogOpen || !!editingSource} onOpenChange={(open) => {

@@ -38,7 +38,7 @@ model HostEntry {
   lastSeen         DateTime            @updatedAt
   occurrenceCount  Int                 @default(1)
   sourceId         String?
-  source           Source?             @relation(fields: [sourceId], references: [id])
+  source           Source?             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   aggregationHosts AggregationHost[]
   sourceMappings   SourceHostMapping[]
 

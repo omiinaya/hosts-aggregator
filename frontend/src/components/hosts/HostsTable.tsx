@@ -91,7 +91,7 @@ const HostsTable: React.FC<HostsTableProps> = ({
           <div className="col-span-4">Domain</div>
           <div className="col-span-2">Type</div>
           <div className="col-span-2 text-center">Occurrences</div>
-          <div className="col-span-2 text-center">Sources</div>
+          <div className="col-span-3">Source</div>
           <div className="col-span-1 text-center">Status</div>
         </div>
 
@@ -140,8 +140,10 @@ const HostsTable: React.FC<HostsTableProps> = ({
                 <span className="text-sm">{host.occurrenceCount.toLocaleString()}</span>
               </div>
 
-              <div className="col-span-2 text-center">
-                <span className="text-sm">{host.sources.length}</span>
+              <div className="col-span-3">
+                <span className="text-sm truncate block" title={host.sources.map(s => s.name).join(', ')}>
+                  {host.sources.length > 0 ? host.sources.map(s => s.name).join(', ') : 'Unknown'}
+                </span>
               </div>
 
               <div className="col-span-1 flex justify-center">

@@ -153,17 +153,31 @@ export class SourcesController {
         }
       });
 
+      // Track aggregation result to return to frontend
+      let aggregationResult: { success: boolean; error?: string; entriesProcessed?: number } = {
+        success: true
+      };
+
       // Trigger immediate aggregation if source is enabled
       if (enabled) {
         try {
-          await this.aggregationService.aggregateSources();
+          const result = await this.aggregationService.aggregateSources();
           logger.info('Immediate aggregation completed after source creation');
+          aggregationResult = {
+            success: true,
+            entriesProcessed: result.totalEntries
+          };
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           logger.error('Failed to perform immediate aggregation after source creation:', error);
           // Fall back to background aggregation
           this.autoAggregationService.triggerAggregation().catch(error => {
             logger.error('Failed to trigger background aggregation after source creation:', error);
           });
+          aggregationResult = {
+            success: false,
+            error: `Aggregation failed: ${errorMessage}. Background aggregation has been triggered.`
+          };
         }
       }
 
@@ -172,7 +186,8 @@ export class SourcesController {
         data: {
           ...source,
           metadata: source.metadata ? JSON.parse(source.metadata) : null
-        }
+        },
+        aggregation: aggregationResult
       });
     } catch (error) {
       logger.error('Failed to create source:', error);

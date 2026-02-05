@@ -4,6 +4,8 @@ export interface Source {
   url: string
   enabled: boolean
   lastChecked?: string
+  hostCount?: number
+  lastFetchStatus?: 'SUCCESS' | 'ERROR'
   createdAt: string
   updatedAt: string
 }
