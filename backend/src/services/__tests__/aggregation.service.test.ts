@@ -10,9 +10,33 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 describe('AggregationService', () => {
   let service: AggregationService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Clean database before each test to ensure isolation
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = OFF;');
+    await prisma.$executeRawUnsafe('DELETE FROM "aggregation_hosts"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "aggregation_sources"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "aggregation_results"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "host_entries"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "source_fetch_logs"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "source_contents"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "sources"').catch(() => {});
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
+
     service = new AggregationService();
     jest.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    // Clean up after each test
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = OFF;');
+    await prisma.$executeRawUnsafe('DELETE FROM "aggregation_hosts"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "aggregation_sources"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "aggregation_results"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "host_entries"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "source_fetch_logs"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "source_contents"').catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM "sources"').catch(() => {});
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
   });
 
   describe('aggregateSources', () => {
