@@ -1,6 +1,24 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hosts-aggregator-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hosts_aggregator
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hosts_aggregator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: hosts-aggregator-redis
@@ -24,13 +42,13 @@ services:
       - "3010:3010"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=file:./data/prod.db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hosts_aggregator
       - REDIS_URL=redis://redis:6379
       - PORT=3010
       - LOG_LEVEL=info
-    volumes:
-      - backend-data:/app/data
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -61,5 +79,5 @@ services:
       start_period: 5s
 
 volumes:
-  backend-data:
+  postgres-data:
   redis-data:
