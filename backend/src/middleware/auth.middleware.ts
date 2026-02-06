@@ -86,3 +86,36 @@ export const requireAdmin = requireRole('admin');
  * Middleware to require operator or admin role
  */
 export const requireOperator = requireRole('admin', 'operator');
+
+/**
+ * Optional authentication middleware
+ * Authenticates user if credentials provided, but doesn't require them
+ */
+export async function optionalAuthenticate(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Check for Bearer token
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const user = authService.verifyToken(token);
+      req.user = user;
+      return next();
+    }
+
+    // Check for API key
+    const apiKey = req.headers['x-api-key'] as string;
+    if (apiKey) {
+      const user = await authService.verifyApiKey(apiKey);
+      if (user) {
+        req.user = user;
+        return next();
+      }
+    }
+
+    // No authentication provided, continue without user
+    next();
+  } catch (error) {
+    // Invalid credentials, continue without user
+    next();
+  }
+}

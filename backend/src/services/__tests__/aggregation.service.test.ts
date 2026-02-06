@@ -1,5 +1,6 @@
 import { AggregationService } from '../../services/aggregation.service';
-import { createTestSource, generateStandardHostsContent } from '../helpers/test-utils';
+import { createTestSource, generateStandardHostsContent, generateABPContent } from '../../__tests__/helpers/test-utils';
+import { prisma } from '../../config/database';
 
 // Mock axios
 jest.mock('axios');
@@ -79,12 +80,10 @@ describe('AggregationService', () => {
         enabled: true,
       });
 
-      // Content with block and allow patterns
-      const content = `
-0.0.0.0 blocked.com
+      // Use ABP format for both block and allow patterns
+      const content = `||blocked.com^
 @@||allowed.com^
-0.0.0.0 allowed.com
-      `;
+||allowed.com^`;
 
       mockedAxios.get.mockResolvedValueOnce({ data: content });
 

@@ -250,27 +250,33 @@ export class HostsParser {
     if (!domain || domain.length === 0) {
       return true;
     }
-    
+
     // Allow IP addresses
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (ipRegex.test(domain)) {
       return true;
     }
-    
+
     // Allow wildcards at start or end
     if (domain.startsWith('*') || domain.endsWith('*')) {
       return true;
     }
-    
+
+    // Require at least one dot (TLD) for valid domains
+    // This filters out incomplete patterns like "||incomplete"
+    if (!domain.includes('.')) {
+      return false;
+    }
+
     // Standard domain validation (relaxed to allow underscores)
     const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*$/;
     const isValid = domainRegex.test(domain) && domain.length <= 253;
-    
+
     // Debug logging for rejected entries
     if (!isValid && domain.length > 0) {
       logger.debug(`Domain validation failed: "${domain}"`);
     }
-    
+
     return isValid;
   }
 }

@@ -17,23 +17,41 @@ afterAll(async () => {
 });
 
 async function cleanDatabase() {
-  // Delete in order to respect foreign keys
-  const tables = [
-    'AggregationHost',
-    'AggregationSource',
-    'AggregationResult',
-    'HostEntry',
-    'SourceFetchLog',
-    'SourceContent',
-    'Source',
-  ];
+  try {
+    // Disable foreign keys to allow deleting in any order
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = OFF;');
 
-  for (const table of tables) {
-    try {
-      await prisma.$executeRawUnsafe(`DELETE FROM "${table}"`);
-    } catch (error) {
-      // Table might not exist yet
-      console.warn(`Could not clean table ${table}:`, error);
+    // Delete from all tables using correct SQLite table names
+    const tables = [
+      'aggregation_hosts',
+      'aggregation_sources',
+      'aggregation_results',
+      'host_entries',
+      'source_fetch_logs',
+      'source_contents',
+      'source_host_mappings',
+      'sources',
+      'users',
+    ];
+
+    for (const table of tables) {
+      try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "${table}"`);
+      } catch (error) {
+        // Table might not exist yet
+      }
     }
+
+    // Reset SQLite sequences
+    try {
+      await prisma.$executeRawUnsafe('DELETE FROM sqlite_sequence');
+    } catch {
+      // sqlite_sequence might not exist
+    }
+
+    // Re-enable foreign keys
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
+  } catch (error) {
+    console.error('Database cleanup error:', error);
   }
 }
