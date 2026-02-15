@@ -26,4 +26,7 @@ module.exports = {
   coverageReporters: ['text', 'text-summary', 'lcov', 'html'],
   verbose: true,
   testTimeout: 30000,
+  globalSetup: '<rootDir>/src/__tests__/globalSetup.js',
+  globalTeardown: '<rootDir>/src/__tests__/globalTeardown.js',
+  maxWorkers: 1,
 };
