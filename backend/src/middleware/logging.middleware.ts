@@ -10,7 +10,7 @@ export const loggingMiddleware = (req: Request, res: Response, next: NextFunctio
       statusCode: res.statusCode,
       duration: `${duration}ms`,
       userAgent: req.get('User-Agent'),
-      ip: req.ip
+      ip: req.ip,
     });
   });
 

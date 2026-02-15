@@ -18,7 +18,7 @@ export class AggregationService {
     try {
       // Get all enabled sources
       const sources = await prisma.source.findMany({
-        where: { enabled: true }
+        where: { enabled: true },
       });
 
       if (sources.length === 0) {
@@ -29,13 +29,14 @@ export class AggregationService {
           duplicatesRemoved: 0,
           processingTime: Date.now() - startTime,
           blockedDomains: [],
-          allowedDomains: []
+          allowedDomains: [],
         };
       }
 
       const allEntries: ParsedEntry[] = [];
       const processedSources: string[] = [];
-      const sourceStats: Map<string, { entries: number; duration: number; status: string }> = new Map();
+      const sourceStats: Map<string, { entries: number; duration: number; status: string }> =
+        new Map();
 
       // Process all sources in parallel
       const processingPromises = sources.map(async (source) => {
@@ -44,7 +45,7 @@ export class AggregationService {
           // Verify source still exists before processing
           const sourceExists = await prisma.source.findUnique({
             where: { id: source.id },
-            select: { id: true }
+            select: { id: true },
           });
 
           if (!sourceExists) {
@@ -53,16 +54,16 @@ export class AggregationService {
           }
 
           const content = await this.fetchSourceContent(source);
-          
+
           // Detect format with confidence scoring and manual override support
           const formatDetection = this.detectFormat(
             content,
             source.format as 'standard' | 'adblock' | 'auto' | undefined
           );
-          
+
           // Store the detected format in SourceContent
           await this.storeDetectedFormat(source.id, formatDetection);
-          
+
           const entries = this.parser.parseContent(content, source.id, formatDetection.format);
 
           // Store entries in database with host relationships
@@ -88,13 +89,13 @@ export class AggregationService {
           } catch (logError) {
             logger.warn(`Could not log fetch error for source ${source.id}:`, logError);
           }
-          
+
           return null;
         }
       });
 
       const processingResults = await Promise.all(processingPromises);
-      
+
       // Collect results from successful sources
       for (const result of processingResults) {
         if (result) {
@@ -118,8 +119,8 @@ export class AggregationService {
           allowEntries: result.allowedDomains.length,
           blockEntries: result.blockedDomains.length,
           processingTimeMs: Date.now() - startTime,
-          triggeredBy: 'manual'
-        }
+          triggeredBy: 'manual',
+        },
       });
 
       // Create aggregation source records
@@ -131,8 +132,8 @@ export class AggregationService {
               sourceId,
               entriesContributed: stats.entries,
               fetchStatus: stats.status as 'SUCCESS' | 'ERROR' | 'CACHED' | 'SKIPPED',
-              fetchDurationMs: stats.duration
-            }
+              fetchDurationMs: stats.duration,
+            },
           });
         } catch (error) {
           logger.warn(`Could not create aggregation source record for ${sourceId}:`, error);
@@ -154,14 +155,14 @@ export class AggregationService {
       }
 
       // Batch fetch all host entries for blocked domains
-      const normalizedDomains = result.blockedDomains.map(d => d.toLowerCase());
+      const normalizedDomains = result.blockedDomains.map((d) => d.toLowerCase());
       const hostEntries = await prisma.hostEntry.findMany({
         where: { normalized: { in: normalizedDomains } },
-        select: { id: true, normalized: true }
+        select: { id: true, normalized: true },
       });
 
       // Create a map for quick lookup
-      const entryMap = new Map(hostEntries.map(e => [e.normalized, e.id]));
+      const entryMap = new Map(hostEntries.map((e) => [e.normalized, e.id]));
 
       // Batch create aggregation hosts
       const hostsToCreate = [];
@@ -174,14 +175,14 @@ export class AggregationService {
             aggregationResultId: aggregationResult.id,
             hostEntryId: entryId,
             sourceIds: JSON.stringify(sourceIds),
-            primarySourceId: sourceIds[0] || ''
+            primarySourceId: sourceIds[0] || '',
           });
         }
       }
 
       if (hostsToCreate.length > 0) {
         await prisma.aggregationHost.createMany({
-          data: hostsToCreate
+          data: hostsToCreate,
         });
       }
 
@@ -192,7 +193,7 @@ export class AggregationService {
         duplicatesRemoved: allEntries.length - result.blockedDomains.length,
         processingTime: Date.now() - startTime,
         blockedDomains: result.blockedDomains,
-        allowedDomains: result.allowedDomains
+        allowedDomains: result.allowedDomains,
       };
     } catch (error) {
       logger.error('Aggregation failed:', error);
@@ -212,8 +213,8 @@ export class AggregationService {
       const response = await axios.get(source.url, {
         timeout: 30000,
         headers: {
-          'User-Agent': 'Hosts-Aggregator/1.0'
-        }
+          'User-Agent': 'Hosts-Aggregator/1.0',
+        },
       });
 
       const content = response.data;
@@ -223,7 +224,7 @@ export class AggregationService {
 
       return content;
     } else if (source.type === 'FILE' && source.filePath) {
-      return await this.getCachedContent(source.id) || '';
+      return (await this.getCachedContent(source.id)) || '';
     } else {
       throw new Error(`Invalid source type or missing URL/filePath for source ${source.id}`);
     }
@@ -231,7 +232,7 @@ export class AggregationService {
 
   /**
    * Detects the format of hosts file content with confidence scoring.
-   * 
+   *
    * @param content - The content to analyze
    * @param manualFormat - Optional manual format override ('standard', 'adblock', or 'auto')
    * @param confidenceThreshold - Minimum confidence threshold (0-100) to auto-detect format
@@ -248,45 +249,45 @@ export class AggregationService {
     detectedFormat: 'standard' | 'adblock' | 'auto';
   } {
     const lines = content.split('\n').slice(0, 100); // Check first 100 lines
-    
+
     let adblockPatternCount = 0;
     let standardPatternCount = 0;
     let totalPatternLines = 0;
-    
+
     for (const line of lines) {
       const trimmedLine = line.trim();
-      
+
       // Skip empty lines and comments
       if (!trimmedLine || trimmedLine.startsWith('#')) {
         continue;
       }
-      
+
       // Check for AdBlock patterns: ||domain^
-      if (trimmedLine.match(/\|\|[^\/\s]+\^/)) {
+      if (trimmedLine.match(/\|\|[^/s]+\^/)) {
         adblockPatternCount++;
         totalPatternLines++;
       }
-      
+
       // Check for standard hosts patterns: 0.0.0.0 domain or 127.0.0.1 domain
       if (trimmedLine.match(/^(0\.0\.0\.0|127\.0\.0\.1)\s+/)) {
         standardPatternCount++;
         totalPatternLines++;
       }
     }
-    
+
     // Calculate confidence scores
     let adblockConfidence = 0;
     let standardConfidence = 0;
-    
+
     if (totalPatternLines > 0) {
       adblockConfidence = (adblockPatternCount / totalPatternLines) * 100;
       standardConfidence = (standardPatternCount / totalPatternLines) * 100;
     }
-    
+
     // Determine detected format based on confidence
     let detectedFormat: 'standard' | 'adblock' | 'auto' = 'auto';
     let confidence = 0;
-    
+
     if (adblockConfidence > standardConfidence) {
       detectedFormat = 'adblock';
       confidence = adblockConfidence;
@@ -297,7 +298,7 @@ export class AggregationService {
       detectedFormat = 'auto';
       confidence = 0;
     }
-    
+
     // Check for mixed content (both formats present with similar percentages)
     const mixedContentThreshold = 10; // Both formats present with at least 10%
     if (adblockPatternCount > 0 && standardPatternCount > 0) {
@@ -305,47 +306,49 @@ export class AggregationService {
       if (difference < mixedContentThreshold) {
         logger.warn(
           `Mixed content detected: ${adblockPatternCount} AdBlock patterns, ${standardPatternCount} standard patterns. ` +
-          `Confidence: AdBlock ${adblockConfidence.toFixed(1)}%, Standard ${standardConfidence.toFixed(1)}%`
+            `Confidence: AdBlock ${adblockConfidence.toFixed(1)}%, Standard ${standardConfidence.toFixed(1)}%`
         );
       }
     }
-    
+
     // Apply manual format override if provided and not 'auto'
     if (manualFormat && manualFormat !== 'auto') {
-      logger.info(`Using manual format override: ${manualFormat} (detected: ${detectedFormat}, confidence: ${confidence.toFixed(1)}%)`);
+      logger.info(
+        `Using manual format override: ${manualFormat} (detected: ${detectedFormat}, confidence: ${confidence.toFixed(1)}%)`
+      );
       return {
         format: manualFormat,
         confidence,
         manualOverride: true,
-        detectedFormat
+        detectedFormat,
       };
     }
-    
+
     // Use auto-detection if confidence is below threshold
     if (confidence < confidenceThreshold) {
       logger.info(
         `Low confidence detection (${confidence.toFixed(1)}% < ${confidenceThreshold}%), using 'auto' format. ` +
-        `Detected: ${detectedFormat}`
+          `Detected: ${detectedFormat}`
       );
       return {
         format: 'auto',
         confidence,
         manualOverride: false,
-        detectedFormat
+        detectedFormat,
       };
     }
-    
+
     return {
       format: detectedFormat,
       confidence,
       manualOverride: false,
-      detectedFormat
+      detectedFormat,
     };
   }
 
   private async getCachedContent(sourceId: string): Promise<string | null> {
     const contentRecord = await prisma.sourceContent.findUnique({
-      where: { sourceId }
+      where: { sourceId },
     });
     return contentRecord?.content || null;
   }
@@ -356,7 +359,7 @@ export class AggregationService {
 
     // Check if content has changed
     const existing = await prisma.sourceContent.findUnique({
-      where: { sourceId }
+      where: { sourceId },
     });
 
     const hasChanged = !existing || existing.contentHash !== contentHash;
@@ -368,15 +371,15 @@ export class AggregationService {
         contentHash,
         lineCount,
         entryCount: 0, // Will be updated after parsing
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       create: {
         sourceId,
         content,
         contentHash,
         lineCount,
-        entryCount: 0
-      }
+        entryCount: 0,
+      },
     });
 
     // Update the fetch log to indicate content change
@@ -387,7 +390,7 @@ export class AggregationService {
 
   /**
    * Stores the detected format information in the SourceContent table.
-   * 
+   *
    * @param sourceId - The source ID
    * @param formatDetection - The format detection result
    */
@@ -404,17 +407,17 @@ export class AggregationService {
       await prisma.sourceContent.update({
         where: { sourceId },
         data: {
-          format: formatDetection.format
-        }
+          format: formatDetection.format,
+        },
       });
 
       // Log format detection details
       logger.info(
         `Format detection for source ${sourceId}: ` +
-        `format=${formatDetection.format}, ` +
-        `confidence=${formatDetection.confidence.toFixed(1)}%, ` +
-        `manualOverride=${formatDetection.manualOverride}, ` +
-        `detected=${formatDetection.detectedFormat}`
+          `format=${formatDetection.format}, ` +
+          `confidence=${formatDetection.confidence.toFixed(1)}%, ` +
+          `manualOverride=${formatDetection.manualOverride}, ` +
+          `detected=${formatDetection.detectedFormat}`
       );
     } catch (error) {
       // Log but don't fail - content might not exist yet
@@ -426,7 +429,7 @@ export class AggregationService {
     // Update entry count in source content
     await prisma.sourceContent.updateMany({
       where: { sourceId },
-      data: { entryCount: entries.length }
+      data: { entryCount: entries.length },
     });
 
     if (entries.length === 0) {
@@ -449,18 +452,18 @@ export class AggregationService {
         await prisma.$transaction(
           async (tx) => {
             // Batch upsert all entries in parallel within the batch
-            const upsertPromises = batch.map(entry =>
+            const upsertPromises = batch.map((entry) =>
               tx.hostEntry.upsert({
                 where: {
                   domain_sourceId: {
                     domain: entry.domain,
-                    sourceId
-                  }
+                    sourceId,
+                  },
                 },
                 update: {
                   entryType: entry.type,
                   lastSeen: new Date(),
-                  occurrenceCount: { increment: 1 }
+                  occurrenceCount: { increment: 1 },
                 },
                 create: {
                   domain: entry.domain,
@@ -469,8 +472,8 @@ export class AggregationService {
                   sourceId,
                   firstSeen: new Date(),
                   lastSeen: new Date(),
-                  occurrenceCount: 1
-                }
+                  occurrenceCount: 1,
+                },
               })
             );
 
@@ -481,11 +484,16 @@ export class AggregationService {
 
         totalStored += batch.length;
         if (totalBatches > 1) {
-          logger.debug(`Processed batch ${batchNumber}/${totalBatches} (${batch.length} entries) for source ${sourceId}`);
+          logger.debug(
+            `Processed batch ${batchNumber}/${totalBatches} (${batch.length} entries) for source ${sourceId}`
+          );
         }
       } catch (error) {
         failedBatches++;
-        logger.error(`Failed to process batch ${batchNumber}/${totalBatches} for source ${sourceId}:`, error);
+        logger.error(
+          `Failed to process batch ${batchNumber}/${totalBatches} for source ${sourceId}:`,
+          error
+        );
         // Continue with next batch even if this one fails
       }
     }
@@ -493,7 +501,7 @@ export class AggregationService {
     if (failedBatches > 0) {
       logger.warn(
         `Source ${sourceId}: Stored ${totalStored}/${entries.length} entries ` +
-        `(${failedBatches}/${totalBatches} batches failed)`
+          `(${failedBatches}/${totalBatches} batches failed)`
       );
     } else {
       logger.info(`Stored ${totalStored} entries for source ${sourceId}`);
@@ -506,7 +514,7 @@ export class AggregationService {
     httpStatus: number | null,
     errorMessage: string | null,
     responseTimeMs: number,
-    entryCount: number
+    _entryCount: number
   ): Promise<void> {
     try {
       await prisma.sourceFetchLog.create({
@@ -516,8 +524,8 @@ export class AggregationService {
           httpStatus,
           errorMessage,
           responseTimeMs,
-          contentChanged: false // Will be updated if content changes
-        }
+          contentChanged: false, // Will be updated if content changes
+        },
       });
     } catch (error) {
       // Source might have been deleted, log but don't throw
@@ -548,7 +556,7 @@ export class AggregationService {
 
     return {
       blockedDomains: Array.from(blocked).sort(),
-      allowedDomains: Array.from(allowed).sort()
+      allowedDomains: Array.from(allowed).sort(),
     };
   }
 
@@ -561,17 +569,17 @@ export class AggregationService {
             include: {
               source: {
                 select: {
-                  name: true
-                }
-              }
-            }
+                  name: true,
+                },
+              },
+            },
           },
           _count: {
             select: {
-              hosts: true
-            }
-          }
-        }
+              hosts: true,
+            },
+          },
+        },
       });
 
       return result;
@@ -590,7 +598,7 @@ export class AggregationService {
     try {
       const totalSources = await prisma.source.count();
       const enabledSources = await prisma.source.count({
-        where: { enabled: true }
+        where: { enabled: true },
       });
 
       // Count unique host entries
@@ -602,7 +610,7 @@ export class AggregationService {
         totalSources,
         enabledSources,
         totalEntries,
-        lastAggregation: latestAggregation?.timestamp || null
+        lastAggregation: latestAggregation?.timestamp || null,
       };
     } catch (error) {
       logger.error('Failed to get aggregation stats:', error);
@@ -647,7 +655,7 @@ export class AggregationService {
 
       // Check if content changed
       const existingCache = await prisma.sourceContent.findUnique({
-        where: { sourceId: source.id }
+        where: { sourceId: source.id },
       });
       const contentChanged = existingCache?.content !== content;
 
@@ -665,7 +673,7 @@ export class AggregationService {
         success: true,
         entriesProcessed: entries.length,
         contentChanged,
-        format: formatDetection.format
+        format: formatDetection.format,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -690,7 +698,7 @@ export class AggregationService {
         entriesProcessed: 0,
         contentChanged: false,
         format: 'unknown',
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }

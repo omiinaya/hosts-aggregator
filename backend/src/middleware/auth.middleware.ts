@@ -1,14 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { authService, AuthUser } from '../services/auth.service';
+import { authService } from '../services/auth.service';
 import { logger } from '../utils/logger';
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: AuthUser;
-    }
-  }
-}
 
 /**
  * Authentication middleware

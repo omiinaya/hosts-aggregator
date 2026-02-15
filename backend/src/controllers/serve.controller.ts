@@ -12,7 +12,7 @@ export class ServeController {
     this.parser = new HostsParser();
   }
 
-  private authenticateRequest(req: Request, res: Response): boolean {
+  private authenticateRequest(req: Request, _res: Response): boolean {
     if (!servingConfig.requireAuthForServe) {
       return true;
     }
@@ -35,19 +35,19 @@ export class ServeController {
       where: {
         enabled: true,
         source: {
-          enabled: true
-        }
+          enabled: true,
+        },
       },
       select: {
-        domain: true
+        domain: true,
       },
       distinct: ['normalized'],
       orderBy: {
-        domain: 'asc'
-      }
+        domain: 'asc',
+      },
     });
 
-    return hosts.map(h => h.domain);
+    return hosts.map((h) => h.domain);
   }
 
   /**
@@ -58,9 +58,9 @@ export class ServeController {
       where: {
         enabled: true,
         source: {
-          enabled: true
-        }
-      }
+          enabled: true,
+        },
+      },
     });
   }
 
@@ -80,7 +80,7 @@ export class ServeController {
 
         // Get enabled sources count for header
         const enabledSourcesCount = await prisma.source.count({
-          where: { enabled: true }
+          where: { enabled: true },
         });
 
         // Build hosts file content
@@ -100,7 +100,7 @@ export class ServeController {
 # Sources: ${enabledSourcesCount}
 
 `;
-          content = header + hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
+          content = header + hosts.map((domain) => `0.0.0.0 ${domain}`).join('\n');
         }
 
         // Set appropriate headers for Pi-hole/AdGuard Home
@@ -109,7 +109,10 @@ export class ServeController {
         // Set cache control headers based on configuration
         if (servingConfig.cacheControlEnabled) {
           res.setHeader('Cache-Control', `public, max-age=${servingConfig.cacheMaxAgeSeconds}`);
-          res.setHeader('Expires', new Date(Date.now() + servingConfig.cacheMaxAgeSeconds * 1000).toUTCString());
+          res.setHeader(
+            'Expires',
+            new Date(Date.now() + servingConfig.cacheMaxAgeSeconds * 1000).toUTCString()
+          );
         } else {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           res.setHeader('Pragma', 'no-cache');
@@ -153,7 +156,7 @@ export class ServeController {
 #
 `;
         } else {
-          content = hosts.map(domain => `0.0.0.0 ${domain}`).join('\n');
+          content = hosts.map((domain) => `0.0.0.0 ${domain}`).join('\n');
         }
 
         // Set appropriate headers
@@ -181,15 +184,16 @@ export class ServeController {
     try {
       const hostsCount = await this.getEnabledHostsCount();
       const enabledSourcesCount = await prisma.source.count({
-        where: { enabled: true }
+        where: { enabled: true },
       });
 
       // Calculate approximate file size (header + each line)
       const headerSize = 150; // Approximate header size
       const avgLineSize = 25; // "0.0.0.0 " + domain + newline
-      const estimatedSize = hostsCount === 0
-        ? headerSize + 100 // Empty file with comments
-        : headerSize + (hostsCount * avgLineSize);
+      const estimatedSize =
+        hostsCount === 0
+          ? headerSize + 100 // Empty file with comments
+          : headerSize + hostsCount * avgLineSize;
 
       res.json({
         status: 'success',
@@ -200,8 +204,8 @@ export class ServeController {
           totalSources: enabledSourcesCount,
           generatedAt: new Date().toISOString(),
           downloadUrl: `${req.protocol}://${req.get('host')}/api/serve/hosts`,
-          rawDownloadUrl: `${req.protocol}://${req.get('host')}/api/serve/hosts/raw`
-        }
+          rawDownloadUrl: `${req.protocol}://${req.get('host')}/api/serve/hosts/raw`,
+        },
       });
     } catch (error) {
       logger.error('Failed to get hosts file info:', error);
@@ -223,8 +227,8 @@ export class ServeController {
           totalEntries: hostsCount,
           message: hasHostsFile
             ? 'Hosts file is available for serving'
-            : 'No hosts available. Add and enable sources first.'
-        }
+            : 'No hosts available. Add and enable sources first.',
+        },
       });
     } catch (error) {
       logger.error('Health check failed:', error);
@@ -236,22 +240,24 @@ export class ServeController {
    * Get all unique host entries from enabled sources with full details
    * Used for ABP format generation
    */
-  private async getHostEntriesFromEnabledSources(): Promise<Array<{ domain: string; entryType: string }>> {
+  private async getHostEntriesFromEnabledSources(): Promise<
+    Array<{ domain: string; entryType: string }>
+  > {
     const hosts = await prisma.hostEntry.findMany({
       where: {
         enabled: true,
         source: {
-          enabled: true
-        }
+          enabled: true,
+        },
       },
       select: {
         domain: true,
-        entryType: true
+        entryType: true,
       },
       distinct: ['normalized'],
       orderBy: {
-        domain: 'asc'
-      }
+        domain: 'asc',
+      },
     });
 
     return hosts;
@@ -260,7 +266,7 @@ export class ServeController {
   /**
    * Serve aggregated hosts in ABP format
    * GET /api/serve/abp
-   * 
+   *
    * Returns hosts in AdBlock Plus (ABP) format with ||domain^ patterns.
    * Includes proper headers for adblockers.
    */
@@ -275,7 +281,7 @@ export class ServeController {
 
       // Get enabled sources count for header
       const enabledSourcesCount = await prisma.source.count({
-        where: { enabled: true }
+        where: { enabled: true },
       });
 
       // Build ABP format content
@@ -300,9 +306,9 @@ export class ServeController {
 !
 
 `;
-        
+
         // Convert hosts to ABP format
-        const abpLines = hosts.map(host => {
+        const abpLines = hosts.map((host) => {
           if (host.entryType === 'allow') {
             return `@@||${host.domain}^`;
           } else if (host.entryType === 'element') {
@@ -313,7 +319,7 @@ export class ServeController {
             return `||${host.domain}^`;
           }
         });
-        
+
         content = header + abpLines.join('\n');
       }
 
@@ -323,7 +329,10 @@ export class ServeController {
       // Set cache control headers based on configuration
       if (servingConfig.cacheControlEnabled) {
         res.setHeader('Cache-Control', `public, max-age=${servingConfig.cacheMaxAgeSeconds}`);
-        res.setHeader('Expires', new Date(Date.now() + servingConfig.cacheMaxAgeSeconds * 1000).toUTCString());
+        res.setHeader(
+          'Expires',
+          new Date(Date.now() + servingConfig.cacheMaxAgeSeconds * 1000).toUTCString()
+        );
       } else {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
@@ -346,7 +355,7 @@ export class ServeController {
   /**
    * Serve aggregated hosts in ABP format (raw)
    * GET /api/serve/abp/raw
-   * 
+   *
    * Returns hosts in AdBlock Plus format without authentication
    * and without cache control headers.
    */
@@ -370,9 +379,9 @@ export class ServeController {
 !
 
 `;
-        
+
         // Convert hosts to ABP format
-        const abpLines = hosts.map(host => {
+        const abpLines = hosts.map((host) => {
           if (host.entryType === 'allow') {
             return `@@||${host.domain}^`;
           } else if (host.entryType === 'element') {
@@ -381,7 +390,7 @@ export class ServeController {
             return `||${host.domain}^`;
           }
         });
-        
+
         content = header + abpLines.join('\n');
       }
 

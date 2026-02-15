@@ -16,7 +16,7 @@ export class AggregateController {
 
       res.json({
         status: 'success',
-        data: stats
+        data: stats,
       });
     } catch (error) {
       logger.error('Aggregation failed:', error);
@@ -34,7 +34,7 @@ export class AggregateController {
 
       res.json({
         status: 'success',
-        data: latestAggregation
+        data: latestAggregation,
       });
     } catch (error) {
       logger.error('Failed to get aggregated data:', error);
@@ -48,7 +48,7 @@ export class AggregateController {
 
       res.json({
         status: 'success',
-        data: stats
+        data: stats,
       });
     } catch (error) {
       logger.error('Failed to get aggregation stats:', error);
@@ -63,7 +63,7 @@ export class AggregateController {
 
       res.json({
         status: 'success',
-        data: latestAggregation ? [latestAggregation] : []
+        data: latestAggregation ? [latestAggregation] : [],
       });
     } catch (error) {
       logger.error('Failed to get aggregation history:', error);
@@ -83,13 +83,12 @@ export class AggregateController {
           status: latestAggregation ? 'completed' : 'idle',
           progress: 100,
           totalSources: 0,
-          processedSources: 0
-        }
+          processedSources: 0,
+        },
       });
     } catch (error) {
       logger.error('Failed to get aggregation status:', error);
       next(error);
     }
   }
-
 }

@@ -162,7 +162,7 @@ export const useRefreshSource = () => {
         throw new Error(error.message || 'Failed to refresh source')
       }
     },
-    onSuccess: (_, id) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sources'] })
       queryClient.invalidateQueries({ queryKey: ['hosts'] })
       toast.success('Source refreshed successfully')

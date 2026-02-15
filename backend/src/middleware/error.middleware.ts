@@ -8,12 +8,7 @@ export interface AppError extends Error {
   code?: string;
 }
 
-const errorMiddleware = (
-  error: AppError,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+const errorMiddleware = (error: AppError, req: Request, res: Response, _next: NextFunction) => {
   error.statusCode = error.statusCode || 500;
   error.status = error.status || 'error';
 
@@ -22,7 +17,7 @@ const errorMiddleware = (
       stack: error.stack,
       url: req.url,
       method: req.method,
-      ip: req.ip
+      ip: req.ip,
     });
   }
 
@@ -44,7 +39,7 @@ const errorMiddleware = (
   res.status(error.statusCode).json({
     status: error.status,
     message: error.message,
-    ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+    ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
   });
 };
 

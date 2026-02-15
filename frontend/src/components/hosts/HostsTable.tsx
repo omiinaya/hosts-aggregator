@@ -7,8 +7,6 @@ import {
   ChevronRight,
   CheckSquare,
   Square,
-  Power,
-  PowerOff,
   Globe,
 } from 'lucide-react'
 import { HostEntry, HostListResponse } from '../../types'

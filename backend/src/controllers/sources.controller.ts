@@ -24,29 +24,29 @@ export class SourcesController {
         include: {
           _count: {
             select: {
-              hosts: true
-            }
+              hosts: true,
+            },
           },
           contentCache: {
             select: {
               fetchedAt: true,
-              entryCount: true
-            }
+              entryCount: true,
+            },
           },
           fetchLogs: {
             orderBy: { fetchedAt: 'desc' },
             take: 1,
             select: {
               status: true,
-              fetchedAt: true
-            }
-          }
-        }
+              fetchedAt: true,
+            },
+          },
+        },
       });
 
       res.json({
         status: 'success',
-        data: sources.map(source => ({
+        data: sources.map((source) => ({
           ...source,
           metadata: source.metadata ? JSON.parse(source.metadata) : null,
           hostCount: source._count.hosts,
@@ -55,8 +55,8 @@ export class SourcesController {
           entryCount: source.contentCache?.entryCount || 0,
           _count: undefined,
           contentCache: undefined,
-          fetchLogs: undefined
-        }))
+          fetchLogs: undefined,
+        })),
       });
     } catch (error) {
       logger.error('Failed to get sources:', error);
@@ -73,16 +73,16 @@ export class SourcesController {
         include: {
           _count: {
             select: {
-              hosts: true
-            }
+              hosts: true,
+            },
           },
           contentCache: {
             select: {
               fetchedAt: true,
               entryCount: true,
               lineCount: true,
-              contentHash: true
-            }
+              contentHash: true,
+            },
           },
           fetchLogs: {
             orderBy: { fetchedAt: 'desc' },
@@ -93,17 +93,17 @@ export class SourcesController {
               errorMessage: true,
               responseTimeMs: true,
               contentChanged: true,
-              fetchedAt: true
-            }
+              fetchedAt: true,
+            },
           },
           hosts: {
             select: {
               domain: true,
-              entryType: true
+              entryType: true,
             },
-            take: 100
-          }
-        }
+            take: 100,
+          },
+        },
       });
 
       if (!source) {
@@ -119,8 +119,8 @@ export class SourcesController {
           lastFetched: source.contentCache?.fetchedAt || null,
           lastFetchStatus: source.fetchLogs[0]?.status || null,
           entryCount: source.contentCache?.entryCount || 0,
-          _count: undefined
-        }
+          _count: undefined,
+        },
       });
     } catch (error) {
       logger.error(`Failed to get source ${req.params.id}:`, error);
@@ -134,7 +134,7 @@ export class SourcesController {
 
       // Check if source with same name already exists
       const existingSource = await prisma.source.findUnique({
-        where: { name }
+        where: { name },
       });
 
       if (existingSource) {
@@ -149,13 +149,13 @@ export class SourcesController {
           type: 'URL',
           enabled,
           format: format || 'auto',
-          metadata: metadata ? JSON.stringify(metadata) : null
-        }
+          metadata: metadata ? JSON.stringify(metadata) : null,
+        },
       });
 
       // Track aggregation result to return to frontend
       let aggregationResult: { success: boolean; error?: string; entriesProcessed?: number } = {
-        success: true
+        success: true,
       };
 
       // Trigger immediate aggregation if source is enabled
@@ -165,18 +165,18 @@ export class SourcesController {
           logger.info('Immediate aggregation completed after source creation');
           aggregationResult = {
             success: true,
-            entriesProcessed: result.totalEntries
+            entriesProcessed: result.totalEntries,
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           logger.error('Failed to perform immediate aggregation after source creation:', error);
           // Fall back to background aggregation
-          this.autoAggregationService.triggerAggregation().catch(error => {
+          this.autoAggregationService.triggerAggregation().catch((error) => {
             logger.error('Failed to trigger background aggregation after source creation:', error);
           });
           aggregationResult = {
             success: false,
-            error: `Aggregation failed: ${errorMessage}. Background aggregation has been triggered.`
+            error: `Aggregation failed: ${errorMessage}. Background aggregation has been triggered.`,
           };
         }
       }
@@ -185,9 +185,9 @@ export class SourcesController {
         status: 'success',
         data: {
           ...source,
-          metadata: source.metadata ? JSON.parse(source.metadata) : null
+          metadata: source.metadata ? JSON.parse(source.metadata) : null,
         },
-        aggregation: aggregationResult
+        aggregation: aggregationResult,
       });
     } catch (error) {
       logger.error('Failed to create source:', error);
@@ -201,7 +201,7 @@ export class SourcesController {
       const { name, url, enabled, metadata, format } = req.body;
 
       const existingSource = await prisma.source.findUnique({
-        where: { id }
+        where: { id },
       });
 
       if (!existingSource) {
@@ -211,7 +211,7 @@ export class SourcesController {
       // Check if new name conflicts with another source
       if (name && name !== existingSource.name) {
         const nameConflict = await prisma.source.findUnique({
-          where: { name }
+          where: { name },
         });
 
         if (nameConflict) {
@@ -223,7 +223,7 @@ export class SourcesController {
       const urlChanged = url !== undefined && url !== existingSource.url;
       if (urlChanged) {
         await prisma.sourceContent.deleteMany({
-          where: { sourceId: id }
+          where: { sourceId: id },
         });
       }
 
@@ -236,7 +236,7 @@ export class SourcesController {
 
       const source = await prisma.source.update({
         where: { id },
-        data: updateData
+        data: updateData,
       });
 
       // Trigger immediate aggregation if source is enabled or was enabled before update
@@ -252,7 +252,7 @@ export class SourcesController {
         } catch (error) {
           logger.error('Failed to perform immediate aggregation after source update:', error);
           // Fall back to background aggregation
-          this.autoAggregationService.triggerAggregation().catch(error => {
+          this.autoAggregationService.triggerAggregation().catch((error) => {
             logger.error('Failed to trigger background aggregation after source update:', error);
           });
         }
@@ -262,8 +262,8 @@ export class SourcesController {
         status: 'success',
         data: {
           ...source,
-          metadata: source.metadata ? JSON.parse(source.metadata) : null
-        }
+          metadata: source.metadata ? JSON.parse(source.metadata) : null,
+        },
       });
     } catch (error) {
       logger.error(`Failed to update source ${req.params.id}:`, error);
@@ -276,7 +276,7 @@ export class SourcesController {
       const { id } = req.params;
 
       const source = await prisma.source.findUnique({
-        where: { id }
+        where: { id },
       });
 
       if (!source) {
@@ -285,7 +285,7 @@ export class SourcesController {
 
       // Cascade delete will handle related records (contentCache, hosts, fetchLogs)
       await prisma.source.delete({
-        where: { id }
+        where: { id },
       });
 
       // Trigger immediate aggregation if source was enabled
@@ -296,7 +296,7 @@ export class SourcesController {
         } catch (error) {
           logger.error('Failed to perform immediate aggregation after source deletion:', error);
           // Fall back to background aggregation
-          this.autoAggregationService.triggerAggregation().catch(error => {
+          this.autoAggregationService.triggerAggregation().catch((error) => {
             logger.error('Failed to trigger background aggregation after source deletion:', error);
           });
         }
@@ -314,7 +314,7 @@ export class SourcesController {
       const { id } = req.params;
 
       const source = await prisma.source.findUnique({
-        where: { id }
+        where: { id },
       });
 
       if (!source) {
@@ -324,8 +324,8 @@ export class SourcesController {
       const updatedSource = await prisma.source.update({
         where: { id },
         data: {
-          enabled: !source.enabled
-        }
+          enabled: !source.enabled,
+        },
       });
 
       // Always trigger immediate aggregation when toggling (enabled state changed)
@@ -335,7 +335,7 @@ export class SourcesController {
       } catch (error) {
         logger.error('Failed to perform immediate aggregation after source toggle:', error);
         // Fall back to background aggregation
-        this.autoAggregationService.triggerAggregation().catch(error => {
+        this.autoAggregationService.triggerAggregation().catch((error) => {
           logger.error('Failed to trigger background aggregation after source toggle:', error);
         });
       }
@@ -344,8 +344,8 @@ export class SourcesController {
         status: 'success',
         data: {
           ...updatedSource,
-          metadata: updatedSource.metadata ? JSON.parse(updatedSource.metadata) : null
-        }
+          metadata: updatedSource.metadata ? JSON.parse(updatedSource.metadata) : null,
+        },
       });
     } catch (error) {
       logger.error(`Failed to toggle source ${req.params.id}:`, error);
@@ -358,7 +358,7 @@ export class SourcesController {
       const { id } = req.params;
 
       const source = await prisma.source.findUnique({
-        where: { id }
+        where: { id },
       });
 
       if (!source) {
@@ -372,7 +372,7 @@ export class SourcesController {
       if (!wasEnabled) {
         await prisma.source.update({
           where: { id },
-          data: { enabled: true }
+          data: { enabled: true },
         });
       }
 
@@ -383,7 +383,7 @@ export class SourcesController {
       if (!wasEnabled) {
         await prisma.source.update({
           where: { id },
-          data: { enabled: false }
+          data: { enabled: false },
         });
       }
 
@@ -397,8 +397,8 @@ export class SourcesController {
         data: {
           entriesProcessed: result.entriesProcessed,
           contentChanged: result.contentChanged,
-          format: result.format
-        }
+          format: result.format,
+        },
       });
     } catch (error) {
       logger.error(`Failed to refresh source ${req.params.id}:`, error);
@@ -411,7 +411,7 @@ export class SourcesController {
       const { id } = req.params;
 
       const source = await prisma.source.findUnique({
-        where: { id }
+        where: { id },
       });
 
       if (!source) {
@@ -420,7 +420,7 @@ export class SourcesController {
 
       // Delete existing content cache
       await prisma.sourceContent.deleteMany({
-        where: { sourceId: id }
+        where: { sourceId: id },
       });
 
       // Trigger immediate aggregation to re-fetch content
@@ -430,14 +430,14 @@ export class SourcesController {
       } catch (error) {
         logger.error('Failed to perform immediate aggregation after cache refresh:', error);
         // Fall back to background aggregation
-        this.autoAggregationService.triggerAggregation().catch(error => {
+        this.autoAggregationService.triggerAggregation().catch((error) => {
           logger.error('Failed to trigger background aggregation after cache refresh:', error);
         });
       }
 
       res.json({
         status: 'success',
-        message: 'Cache refreshed successfully'
+        message: 'Cache refreshed successfully',
       });
     } catch (error) {
       logger.error(`Failed to refresh cache for source ${req.params.id}:`, error);
@@ -449,13 +449,13 @@ export class SourcesController {
     try {
       // Get all enabled sources
       const sources = await prisma.source.findMany({
-        where: { enabled: true }
+        where: { enabled: true },
       });
 
       // Delete content cache for all enabled sources
       for (const source of sources) {
         await prisma.sourceContent.deleteMany({
-          where: { sourceId: source.id }
+          where: { sourceId: source.id },
         });
       }
 
@@ -466,14 +466,14 @@ export class SourcesController {
       } catch (error) {
         logger.error('Failed to perform immediate aggregation after bulk cache refresh:', error);
         // Fall back to background aggregation
-        this.autoAggregationService.triggerAggregation().catch(error => {
+        this.autoAggregationService.triggerAggregation().catch((error) => {
           logger.error('Failed to trigger background aggregation after bulk cache refresh:', error);
         });
       }
 
       res.json({
         status: 'success',
-        message: `Cache refreshed for ${sources.length} sources`
+        message: `Cache refreshed for ${sources.length} sources`,
       });
     } catch (error) {
       logger.error('Failed to refresh all cache:', error);
@@ -484,7 +484,7 @@ export class SourcesController {
   /**
    * Detect the format of a source's content
    * GET /api/sources/:id/detect-format
-   * 
+   *
    * This endpoint analyzes the source's cached content and returns
    * the detected format with confidence score and metadata.
    */
@@ -496,8 +496,8 @@ export class SourcesController {
       const source = await prisma.source.findUnique({
         where: { id },
         include: {
-          contentCache: true
-        }
+          contentCache: true,
+        },
       });
 
       if (!source) {
@@ -506,65 +506,67 @@ export class SourcesController {
 
       // Check if source has cached content
       if (!source.contentCache || !source.contentCache.content) {
-        return next(createError('Source has no cached content. Please refresh the source first.', 400));
+        return next(
+          createError('Source has no cached content. Please refresh the source first.', 400)
+        );
       }
 
       const content = source.contentCache.content;
 
       // Perform format detection
       const lines = content.split('\n').slice(0, 100); // Check first 100 lines
-      
+
       let adblockPatternCount = 0;
       let standardPatternCount = 0;
       let totalPatternLines = 0;
       let elementHidingCount = 0;
       let allowRuleCount = 0;
-      
+
       for (const line of lines) {
         const trimmedLine = line.trim();
-        
+
         // Skip empty lines and comments
         if (!trimmedLine || trimmedLine.startsWith('#') || trimmedLine.startsWith('!')) {
           continue;
         }
-        
+
         // Check for AdBlock patterns: ||domain^
-        if (trimmedLine.match(/\|\|[^\/\s]+\^/)) {
+        if (trimmedLine.match(/\|\|[^/s]+\^/)) {
           adblockPatternCount++;
           totalPatternLines++;
-          
+
           // Check for allow rules (@@||domain^)
           if (trimmedLine.startsWith('@@')) {
             allowRuleCount++;
           }
         }
-        
+
         // Check for element hiding rules (domain.com##selector)
         if (trimmedLine.includes('##')) {
           elementHidingCount++;
           totalPatternLines++;
         }
-        
+
         // Check for standard hosts patterns: 0.0.0.0 domain or 127.0.0.1 domain
         if (trimmedLine.match(/^(0\.0\.0\.0|127\.0\.0\.1)\s+/)) {
           standardPatternCount++;
           totalPatternLines++;
         }
       }
-      
+
       // Calculate confidence scores
       let adblockConfidence = 0;
       let standardConfidence = 0;
-      
+
       if (totalPatternLines > 0) {
         adblockConfidence = ((adblockPatternCount + elementHidingCount) / totalPatternLines) * 100;
         standardConfidence = (standardPatternCount / totalPatternLines) * 100;
       }
-      
+
       // Determine detected format based on confidence
       let detectedFormat: 'standard' | 'adblock' | 'auto' = 'auto';
       let confidence = 0;
-      
+
       if (adblockConfidence > standardConfidence) {
         detectedFormat = 'adblock';
         confidence = adblockConfidence;
@@ -593,12 +595,13 @@ export class SourcesController {
             elementHidingCount,
             allowRuleCount,
             adblockConfidence: Math.round(adblockConfidence * 100) / 100,
-            standardConfidence: Math.round(standardConfidence * 100) / 100
+            standardConfidence: Math.round(standardConfidence * 100) / 100,
           },
-          recommendation: confidence >= 60 
-            ? `Format detected as ${detectedFormat} with ${Math.round(confidence)}% confidence`
-            : 'Low confidence - format could not be reliably detected'
-        }
+          recommendation:
+            confidence >= 60
+              ? `Format detected as ${detectedFormat} with ${Math.round(confidence)}% confidence`
+              : 'Low confidence - format could not be reliably detected',
+        },
       });
     } catch (error) {
       logger.error(`Failed to detect format for source ${req.params.id}:`, error);

@@ -7,7 +7,7 @@ export class HostsController {
   /**
    * Get all hosts with pagination and filtering
    * GET /api/hosts
-   * 
+   *
    * Query parameters:
    * - page: number (default: 1)
    * - limit: number (default: 50, max: 500)
@@ -36,7 +36,7 @@ export class HostsController {
       if (search) {
         where.OR = [
           { domain: { contains: search } },
-          { normalized: { contains: search.toLowerCase() } }
+          { normalized: { contains: search.toLowerCase() } },
         ];
       }
       if (sourceId) {
@@ -57,14 +57,14 @@ export class HostsController {
             select: {
               id: true,
               name: true,
-              enabled: true
-            }
-          }
-        }
+              enabled: true,
+            },
+          },
+        },
       });
 
       // Format response
-      const formattedHosts = hosts.map(host => ({
+      const formattedHosts = hosts.map((host) => ({
         id: host.id,
         domain: host.domain,
         entryType: host.entryType,
@@ -72,11 +72,15 @@ export class HostsController {
         occurrenceCount: host.occurrenceCount,
         firstSeen: host.firstSeen.toISOString(),
         lastSeen: host.lastSeen.toISOString(),
-        sources: host.source ? [{
-          id: host.source.id,
-          name: host.source.name,
-          enabled: host.source.enabled
-        }] : []
+        sources: host.source
+          ? [
+              {
+                id: host.source.id,
+                name: host.source.name,
+                enabled: host.source.enabled,
+              },
+            ]
+          : [],
       }));
 
       const totalPages = Math.ceil(total / limit);
@@ -89,9 +93,9 @@ export class HostsController {
             page,
             limit,
             total,
-            totalPages
-          }
-        }
+            totalPages,
+          },
+        },
       });
     } catch (error) {
       logger.error('Failed to get hosts:', error);
@@ -115,10 +119,10 @@ export class HostsController {
               id: true,
               name: true,
               type: true,
-              enabled: true
-            }
-          }
-        }
+              enabled: true,
+            },
+          },
+        },
       });
 
       if (!host) {
@@ -135,17 +139,21 @@ export class HostsController {
         occurrenceCount: host.occurrenceCount,
         firstSeen: host.firstSeen.toISOString(),
         lastSeen: host.lastSeen.toISOString(),
-        sources: host.source ? [{
-          id: host.source.id,
-          name: host.source.name,
-          type: host.source.type,
-          enabled: host.source.enabled
-        }] : []
+        sources: host.source
+          ? [
+              {
+                id: host.source.id,
+                name: host.source.name,
+                type: host.source.type,
+                enabled: host.source.enabled,
+              },
+            ]
+          : [],
       };
 
       res.json({
         status: 'success',
-        data: formattedHost
+        data: formattedHost,
       });
     } catch (error) {
       logger.error(`Failed to get host ${req.params.id}:`, error);
@@ -156,7 +164,7 @@ export class HostsController {
   /**
    * Update host (enable/disable)
    * PATCH /api/hosts/:id
-   * 
+   *
    * Request body: { enabled?: boolean }
    */
   async updateHost(req: Request, res: Response, next: NextFunction) {
@@ -165,7 +173,7 @@ export class HostsController {
       const { enabled } = req.body;
 
       const existingHost = await prisma.hostEntry.findUnique({
-        where: { id }
+        where: { id },
       });
 
       if (!existingHost) {
@@ -180,15 +188,15 @@ export class HostsController {
 
       const host = await prisma.hostEntry.update({
         where: { id },
-        data: updateData
+        data: updateData,
       });
 
       res.json({
         status: 'success',
         data: {
           id: host.id,
-          enabled: host.enabled
-        }
+          enabled: host.enabled,
+        },
       });
     } catch (error) {
       logger.error(`Failed to update host ${req.params.id}:`, error);
@@ -199,7 +207,7 @@ export class HostsController {
   /**
    * Bulk update hosts
    * PATCH /api/hosts/bulk
-   * 
+   *
    * Request body: { hostIds: string[], enabled: boolean }
    */
   async bulkUpdateHosts(req: Request, res: Response, next: NextFunction) {
@@ -218,20 +226,20 @@ export class HostsController {
       const result = await prisma.hostEntry.updateMany({
         where: {
           id: {
-            in: hostIds
-          }
+            in: hostIds,
+          },
         },
         data: {
-          enabled
-        }
+          enabled,
+        },
       });
 
       res.json({
         status: 'success',
         data: {
           updated: result.count,
-          failed: hostIds.length - result.count
-        }
+          failed: hostIds.length - result.count,
+        },
       });
     } catch (error) {
       logger.error('Failed to bulk update hosts:', error);
@@ -242,7 +250,7 @@ export class HostsController {
   /**
    * Toggle multiple hosts
    * POST /api/hosts/bulk-toggle
-   * 
+   *
    * Request body: { hostIds: string[] }
    */
   async bulkToggleHosts(req: Request, res: Response, next: NextFunction) {
@@ -257,13 +265,13 @@ export class HostsController {
       const hosts = await prisma.hostEntry.findMany({
         where: {
           id: {
-            in: hostIds
-          }
+            in: hostIds,
+          },
         },
         select: {
           id: true,
-          enabled: true
-        }
+          enabled: true,
+        },
       });
 
       // Toggle each host
@@ -272,8 +280,8 @@ export class HostsController {
         await prisma.hostEntry.update({
           where: { id: host.id },
           data: {
-            enabled: !host.enabled
-          }
+            enabled: !host.enabled,
+          },
         });
         toggled++;
       }
@@ -281,8 +289,8 @@ export class HostsController {
       res.json({
         status: 'success',
         data: {
-          toggled
-        }
+          toggled,
+        },
       });
     } catch (error) {
       logger.error('Failed to bulk toggle hosts:', error);
@@ -299,55 +307,57 @@ export class HostsController {
       // Get total counts
       const total = await prisma.hostEntry.count();
       const enabled = await prisma.hostEntry.count({
-        where: { enabled: true }
+        where: { enabled: true },
       });
       const disabled = await prisma.hostEntry.count({
-        where: { enabled: false }
+        where: { enabled: false },
       });
 
       // Get counts by entry type
       const blockCount = await prisma.hostEntry.count({
-        where: { entryType: 'block' }
+        where: { entryType: 'block' },
       });
       const allowCount = await prisma.hostEntry.count({
-        where: { entryType: 'allow' }
+        where: { entryType: 'allow' },
       });
       const elementCount = await prisma.hostEntry.count({
-        where: { entryType: 'element' }
+        where: { entryType: 'element' },
       });
 
       // Get counts by source
       const sourceCounts = await prisma.hostEntry.groupBy({
         by: ['sourceId'],
         _count: {
-          id: true
+          id: true,
         },
         where: {
-          sourceId: { not: null }
-        }
+          sourceId: { not: null },
+        },
       });
 
       // Create source map for quick lookup
-      const sourceIds = sourceCounts.map(sc => sc.sourceId).filter((id): id is string => id !== null);
+      const sourceIds = sourceCounts
+        .map((sc) => sc.sourceId)
+        .filter((id): id is string => id !== null);
       const sources = await prisma.source.findMany({
         where: {
-          id: { in: sourceIds }
+          id: { in: sourceIds },
         },
         select: {
           id: true,
-          name: true
-        }
+          name: true,
+        },
       });
 
-      const sourceMap = new Map(sources.map(s => [s.id, s.name]));
+      const sourceMap = new Map(sources.map((s) => [s.id, s.name]));
 
       // Format by source data
       const bySource = sourceCounts
-        .filter(sc => sc.sourceId !== null)
-        .map(sc => ({
+        .filter((sc) => sc.sourceId !== null)
+        .map((sc) => ({
           sourceId: sc.sourceId,
           sourceName: sourceMap.get(sc.sourceId!) || 'Unknown',
-          hostCount: sc._count.id
+          hostCount: sc._count.id,
         }))
         .sort((a, b) => b.hostCount - a.hostCount);
 
@@ -360,10 +370,10 @@ export class HostsController {
           byEntryType: {
             block: blockCount,
             allow: allowCount,
-            element: elementCount
+            element: elementCount,
           },
-          bySource
-        }
+          bySource,
+        },
       });
     } catch (error) {
       logger.error('Failed to get host stats:', error);
@@ -388,7 +398,7 @@ export class HostsController {
 
       // Verify the host exists
       const host = await prisma.hostEntry.findUnique({
-        where: { id: hostId }
+        where: { id: hostId },
       });
 
       if (!host) {
@@ -399,16 +409,16 @@ export class HostsController {
       const updatedHost = await prisma.hostEntry.update({
         where: { id: hostId },
         data: {
-          enabled
-        }
+          enabled,
+        },
       });
 
       res.json({
         status: 'success',
         data: {
           hostId,
-          enabled: updatedHost.enabled
-        }
+          enabled: updatedHost.enabled,
+        },
       });
     } catch (error) {
       logger.error(`Failed to toggle host ${req.params.hostId}:`, error);

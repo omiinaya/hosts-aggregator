@@ -82,7 +82,7 @@ export class CacheService {
       // Parse Redis info to extract hits and misses
       const hitsMatch = info.match(/keyspace_hits:(\d+)/);
       const missesMatch = info.match(/keyspace_misses:(\d+)/);
-      
+
       const hits = hitsMatch ? parseInt(hitsMatch[1], 10) : 0;
       const misses = missesMatch ? parseInt(missesMatch[1], 10) : 0;
       const total = hits + misses;

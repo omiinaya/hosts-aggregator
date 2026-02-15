@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -9,8 +9,6 @@ import { Switch } from '../components/ui/switch'
 import { useSources, useCreateSource, useUpdateSource, useDeleteSource, useRefreshSource } from '../hooks/useSources'
 import { Source } from '../types'
 import { Plus, Edit, Trash2, ExternalLink, RefreshCw, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
-
-const ITEMS_PER_PAGE = 10
 
 const Sources = () => {
   const { data: sources, isLoading, error } = useSources()
