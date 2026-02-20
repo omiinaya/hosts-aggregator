@@ -1,3 +1,4 @@
+/// <reference types="./types/express" />
 import { app } from './app';
 import { logger } from './utils/logger';
 
