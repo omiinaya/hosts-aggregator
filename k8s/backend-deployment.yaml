@@ -17,9 +17,20 @@ spec:
         app: hosts-aggregator
         component: backend
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
       containers:
         - name: backend
           image: hosts-aggregator-backend:latest
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 3010
           env:

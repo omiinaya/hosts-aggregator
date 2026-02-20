@@ -6,22 +6,30 @@ metadata:
     app: hosts-aggregator
     component: postgres-backup
 spec:
-  schedule: "0 2 * * *"  # Daily at 2 AM
+  schedule: "0 2 * * *" # Daily at 2 AM
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 7
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
       template:
-        metadata:
-          labels:
-            app: hosts-aggregator
-            component: postgres-backup
         spec:
           restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
           containers:
             - name: postgres-backup
               image: postgres:16-alpine
+              securityContext:
+                runAsUser: 70
+                runAsGroup: 70
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
               command:
                 - /bin/sh
                 - -c
@@ -57,6 +65,8 @@ spec:
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backup
+                - name: tmp
+                  mountPath: /tmp
               resources:
                 requests:
                   memory: "256Mi"
@@ -68,6 +78,10 @@ spec:
             - name: backup-storage
               persistentVolumeClaim:
                 claimName: postgres-backup-pvc
+            - name: tmp
+              emptyDir:
+                medium: Memory
+                sizeLimit: 100Mi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

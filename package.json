@@ -24,7 +24,9 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "recharts": "^3.7.0",
+    "use-debounce": "^10.1.0"
   },
   "keywords": [
     "adblocker",

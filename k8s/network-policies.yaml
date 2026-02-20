@@ -1,0 +1,194 @@
+# Deny all ingress/egress traffic by default
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: default
+  labels:
+    app: hosts-aggregator
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow ingress from nginx-ingress to backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-nginx-to-backend
+  namespace: default
+  labels:
+    app: hosts-aggregator
+    component: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: hosts-aggregator
+      component: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3010
+---
+# Allow ingress from nginx-ingress to frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-nginx-to-frontend
+  namespace: default
+  labels:
+    app: hosts-aggregator
+    component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: hosts-aggregator
+      component: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# Allow egress from backend to PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-postgres
+  namespace: default
+  labels:
+    app: hosts-aggregator
+    component: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: hosts-aggregator
+      component: backend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: hosts-aggregator
+              component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Allow egress from backend to Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-redis
+  namespace: default
+  labels:
+    app: hosts-aggregator
+    component: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: hosts-aggregator
+      component: backend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: hosts-aggregator
+              component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# Allow egress to DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: default
+  labels:
+    app: hosts-aggregator
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Allow egress from frontend to backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: default
+  labels:
+    app: hosts-aggregator
+    component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: hosts-aggregator
+      component: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: hosts-aggregator
+              component: backend
+      ports:
+        - protocol: TCP
+          port: 3010
+---
+# Allow backup to PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backup-to-postgres
+  namespace: default
+  labels:
+    app: hosts-aggregator
+    component: postgres-backup
+spec:
+  podSelector:
+    matchLabels:
+      app: hosts-aggregator
+      component: postgres-backup
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: hosts-aggregator
+              component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432

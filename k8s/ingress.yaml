@@ -1,0 +1,68 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hosts-aggregator-ingress
+  labels:
+    app: hosts-aggregator
+  annotations:
+    # cert-manager integration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/acme-challenge-type: http01
+    # Rate limiting annotations
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-rpm: "100"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.hosts-aggregator.local
+        - hosts-aggregator.local
+      secretName: hosts-aggregator-tls
+  rules:
+    - host: api.hosts-aggregator.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hosts-aggregator-backend
+                port:
+                  number: 80
+    - host: hosts-aggregator.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hosts-aggregator-frontend
+                port:
+                  number: 80
+---
+# Certificate for TLS (optional, for manual certificate management)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: hosts-aggregator-cert
+  labels:
+    app: hosts-aggregator
+spec:
+  secretName: hosts-aggregator-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - api.hosts-aggregator.local
+    - hosts-aggregator.local

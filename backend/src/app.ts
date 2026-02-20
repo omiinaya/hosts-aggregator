@@ -5,6 +5,9 @@ import compression from 'compression';
 import { errorMiddleware } from './middleware/error.middleware';
 import { loggingMiddleware } from './middleware/logging.middleware';
 import { apiRouter } from './routes';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerDefinition from './config/swagger';
 
 const app = express();
 
@@ -65,6 +68,35 @@ app.use(loggingMiddleware);
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Swagger/OpenAPI Documentation
+const swaggerOptions: swaggerJsdoc.Options = {
+  swaggerDefinition,
+  apis: [
+    './src/routes/*.ts',
+    './src/routes/*.js',
+    './src/controllers/*.ts',
+    './src/controllers/*.js',
+  ],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+// Swagger UI options
+const swaggerUiOptions: swaggerUi.SwaggerUiOptions = {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Hosts Aggregator API Documentation',
+};
+
+// Serve Swagger UI at /api-docs endpoint
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
+// Serve swagger.json
+app.get('/api-docs/swagger.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json(swaggerSpec);
 });
 
 // API routes
