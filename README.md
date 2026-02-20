@@ -143,9 +143,13 @@ See [docs/SERVING.md](docs/SERVING.md) for detailed serving configuration.
 
 - [Architecture Overview](docs/ARCHITECTURE.md)
 - [API Documentation](docs/API.md)
+- [API Swagger UI](docs/API.md#swagger-documentation) - Interactive API docs at `/api-docs`
+- [Nginx Proxy Manager Guide](docs/NGINX_PROXY_MANAGER.md) - Reverse proxy setup with custom locations
 - [Serving Guide](docs/SERVING.md) - Format options and configuration
 - [Development Guide](docs/DEVELOPMENT.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
+- [User Guide](docs/USER_GUIDE.md) - Comprehensive user documentation
+- [Launch Checklist](docs/LAUNCH_CHECKLIST.md) - Production deployment checklist
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
 
 ## License
