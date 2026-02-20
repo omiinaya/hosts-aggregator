@@ -3,12 +3,13 @@ cmds = [
   "npm install",
   "cd /app/backend && npm install",
   "cd /app/frontend && npm install",
-  "cd /app && npm run build"
+  "cd /app/backend && npm run build"
 ]
 
 [start]
-cmd = "npm run dev"
+cmd = "cd /app/backend && npm start"
 
 [variables]
 NODE_ENV = "production"
 NIXPACKS_PATH = ""
+PORT = "3010"
