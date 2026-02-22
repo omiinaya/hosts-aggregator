@@ -1,15 +1,20 @@
 [phases.build]
 cmds = [
-  "npm install",
+  # Build backend
   "cd /app/backend && npm install",
+  "cd /app/backend && npx prisma generate",
+  "cd /app/backend && npm run build",
+  # Build frontend  
   "cd /app/frontend && npm install",
-  "cd /app/backend && npm run build"
+  "cd /app/frontend && npm run build"
 ]
 
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm", "nginx"]
+
 [start]
-cmd = "cd /app/backend && npm start"
+cmd = "nginx -c /app/nginx.conf && cd /app/backend && npm start"
 
 [variables]
 NODE_ENV = "production"
-NIXPACKS_PATH = ""
 PORT = "3010"
