@@ -30,7 +30,9 @@ hosts-aggregator/
 - **Type-safe development**: Full TypeScript support
 - **Modern UI**: React frontend with shadcn/ui components
 
-## Quick Start
+## 📚 Tests
+
+Unit tests for config, filter, and auto‑aggregation services added to improve coverage.
 
 ### Prerequisites
 
