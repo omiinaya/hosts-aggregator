@@ -59,25 +59,31 @@ const app = express();
  app.use(express.json({ limit: '10mb' }));
  app.use(express.urlencoded({ extended: true }));
 
-  // Serve frontend static files if they exist
-  const frontendDist = '/app/frontend/dist';
-  if (existsSync(frontendDist)) {
-    try {
-      const files = readdirSync(frontendDist, { withFileTypes: true });
-      console.log(`✓ Frontend dist exists: ${frontendDist} (${files.length} items):`, files.slice(0, 10).map(f => f.name).join(', '));
-      const assetsDir = join(frontendDist, 'assets');
-      if (existsSync(assetsDir)) {
-        const assets = readdirSync(assetsDir);
-        console.log(`  assets (${assets.length}):`, assets.slice(0, 10).join(', '));
-      }
-    } catch (err) {
-      console.error(`⚠ Cannot read frontend dist: ${err}`);
-    }
-    app.use(express.static(frontendDist));
-    console.log(`✓ Serving static files from ${frontendDist}`);
-  } else {
-    console.error(`✗ Frontend dist NOT found at ${frontendDist}`);
-  }
+   // Serve frontend static files if they exist
+   const frontendDist = '/app/frontend/dist';
+   if (existsSync(frontendDist)) {
+     try {
+       const files = readdirSync(frontendDist, { withFileTypes: true });
+       console.log(`✓ Frontend dist exists: ${frontendDist} (${files.length} items):`, files.slice(0, 10).map(f => f.name).join(', '));
+       const assetsDir = join(frontendDist, 'assets');
+       if (existsSync(assetsDir)) {
+         const assets = readdirSync(assetsDir);
+         console.log(`  assets (${assets.length}):`, assets.slice(0, 10).join(', '));
+       }
+     } catch (err) {
+       console.error(`⚠ Cannot read frontend dist: ${err}`);
+     }
+     // Explicitly serve /assets folder first
+     const assetsDir = join(frontendDist, 'assets');
+     if (existsSync(assetsDir)) {
+       app.use('/assets', express.static(assetsDir));
+       console.log(`✓ Serving assets from ${assetsDir}`);
+     }
+     app.use(express.static(frontendDist));
+     console.log(`✓ Serving static files from ${frontendDist}`);
+   } else {
+     console.error(`✗ Frontend dist NOT found at ${frontendDist}`);
+   }
 
 // Debug logging for all requests
 app.use((req, res, next) => {
@@ -125,18 +131,18 @@ app.get('/api-docs/swagger.json', (req, res) => {
  // API routes
  app.use('/api', apiRouter);
 
- // SPA fallback: serve index.html for any non-API route
- app.get('*', (req, res, next) => {
-   if (req.path.startsWith('/api') || req.path.startsWith('/api-docs') || req.path === '/health') {
-     return next();
-   }
-   const indexPath = join(frontendDist, 'index.html');
-   if (existsSync(indexPath)) {
-     res.sendFile(indexPath);
-   } else {
-     next();
-   }
- });
+  // SPA fallback: serve index.html for any non-API, non-asset, non-file route
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/api-docs') || req.path === '/health' || req.path.startsWith('/assets')) {
+      return next();
+    }
+    const indexPath = join(frontendDist, 'index.html');
+    if (existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      next();
+    }
+  });
 
 // Error handling middleware
 app.use(errorMiddleware);
