@@ -68,13 +68,13 @@ app.use(compression());
  const frontendDist = '/app/frontend/dist';
  if (existsSync(frontendDist)) {
    try {
-     const contents = readdirSync(frontendDist);
-     console.log(`✓ Frontend dist exists: ${frontendDist} (${contents.length} items)`);
-   } catch (e) {
-     console.error(`⚠ Frontend dist exists but cannot read: ${e}`);
+     const files = readdirSync(frontendDist);
+     console.log(`✓ Frontend dist exists: ${frontendDist} (${files.length} items):`, files.slice(0, 10).join(', '));
+   } catch (err) {
+     console.error(`⚠ Cannot read frontend dist: ${err}`);
    }
    app.use(express.static(frontendDist));
-   console.log(`✓ Serving frontend from ${frontendDist}`);
+   console.log(`✓ Serving static files from ${frontendDist}`);
  } else {
    console.error(`✗ Frontend dist NOT found at ${frontendDist}`);
  }

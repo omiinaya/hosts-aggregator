@@ -9,6 +9,11 @@ export interface AppError extends Error {
 }
 
 const errorMiddleware = (error: AppError, req: Request, res: Response, _next: NextFunction) => {
+  // Always log errors to console regardless of environment
+  console.error(`[ERROR] ${req.method} ${req.path}:`, error);
+  console.error(error.stack);
+
+  // Set defaults
   error.statusCode = error.statusCode || 500;
   error.status = error.status || 'error';
 
