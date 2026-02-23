@@ -9,7 +9,7 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerDefinition from './config/swagger';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 
 const app = express();
 
@@ -67,8 +67,16 @@ app.use(compression());
  // Serve frontend static files if they exist
  const frontendDist = '/app/frontend/dist';
  if (existsSync(frontendDist)) {
+   try {
+     const contents = readdirSync(frontendDist);
+     console.log(`✓ Frontend dist exists: ${frontendDist} (${contents.length} items)`);
+   } catch (e) {
+     console.error(`⚠ Frontend dist exists but cannot read: ${e}`);
+   }
    app.use(express.static(frontendDist));
    console.log(`✓ Serving frontend from ${frontendDist}`);
+ } else {
+   console.error(`✗ Frontend dist NOT found at ${frontendDist}`);
  }
 
 // Debug logging for all requests
@@ -80,24 +88,10 @@ app.use((req, res, next) => {
 // Logging
 app.use(loggingMiddleware);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Root route
-app.get('/', (req, res) => {
-  res.status(200).json({
-    name: 'Hosts Aggregator API',
-    version: '1.0.0',
-    status: 'running',
-    endpoints: {
-      health: '/health',
-      api: '/api',
-      docs: '/api-docs'
-    }
-  });
-});
+ // Health check endpoint
+ app.get('/health', (req, res) => {
+   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+ });
 
 // Swagger/OpenAPI Documentation
 const swaggerOptions: swaggerJsdoc.Options = {
