@@ -63,14 +63,15 @@ app.use(
     try {
       const files = readdirSync(frontendDist, { withFileTypes: true });
       console.log(`✓ Frontend dist exists: ${frontendDist} (${files.length} items):`, files.slice(0, 10).map(f => f.name).join(', '));
+      const assetsDir = join(frontendDist, 'assets');
+      if (existsSync(assetsDir)) {
+        const assets = readdirSync(assetsDir);
+        console.log(`  assets (${assets.length}):`, assets.slice(0, 10).join(', '));
+      }
     } catch (err) {
       console.error(`⚠ Cannot read frontend dist: ${err}`);
     }
-    // Log each static request
-    app.use(frontendDist, (req, res, next) => {
-      console.log(`[STATIC] ${req.method} ${req.path}`);
-      next();
-    }, express.static(frontendDist));
+    app.use(express.static(frontendDist));
     console.log(`✓ Serving static files from ${frontendDist}`);
   } else {
     console.error(`✗ Frontend dist NOT found at ${frontendDist}`);
