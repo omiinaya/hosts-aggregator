@@ -8,6 +8,8 @@ import { apiRouter } from './routes';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerDefinition from './config/swagger';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 const app = express();
 
@@ -58,9 +60,16 @@ app.use(
 // Compression
 app.use(compression());
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+ // Body parsing
+ app.use(express.json({ limit: '10mb' }));
+ app.use(express.urlencoded({ extended: true }));
+
+ // Serve frontend static files if they exist
+ const frontendDist = join(process.cwd(), 'frontend', 'dist');
+ if (existsSync(frontendDist)) {
+   app.use(express.static(frontendDist));
+   console.log(`✓ Serving frontend from ${frontendDist}`);
+ }
 
 // Debug logging for all requests
 app.use((req, res, next) => {
@@ -119,8 +128,21 @@ app.get('/api-docs/swagger.json', (req, res) => {
   res.json(swaggerSpec);
 });
 
-// API routes
-app.use('/api', apiRouter);
+ // API routes
+ app.use('/api', apiRouter);
+
+ // SPA fallback: serve index.html for any non-API route
+ app.get('*', (req, res, next) => {
+   if (req.path.startsWith('/api') || req.path.startsWith('/api-docs') || req.path === '/health') {
+     return next();
+   }
+   const indexPath = join(frontendDist, 'index.html');
+   if (existsSync(indexPath)) {
+     res.sendFile(indexPath);
+   } else {
+     next();
+   }
+ });
 
 // Error handling middleware
 app.use(errorMiddleware);
