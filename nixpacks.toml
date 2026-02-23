@@ -1,12 +1,11 @@
 [phases.build]
 cmds = [
+  # Build frontend
+  "cd /app/frontend && npm ci --no-audit --prefer-offline && npm run build",
+  "test -d /app/frontend/dist || { echo 'ERROR: Frontend dist not found after build'; ls -la /app/frontend; exit 1; }",
   # Build backend
-  "cd /app/backend && npm install",
-  "cd /app/backend && npx prisma generate",
-  "cd /app/backend && npm run build",
-  # Build frontend  
-  "cd /app/frontend && npm install",
-  "cd /app/frontend && npm run build"
+  "cd /app/backend && npm ci --no-audit --prefer-offline && npx prisma generate && npm run build",
+  "test -d /app/backend/dist || { echo 'ERROR: Backend dist not found after build'; ls -la /app/backend; exit 1; }"
 ]
 
 [phases.setup]
