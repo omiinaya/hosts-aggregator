@@ -10,7 +10,7 @@ cmds = [
 ]
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm", "nginx"]
+nixPkgs = ["nodejs_20", "nginx"]
 
 [start]
 cmd = "nginx -c /app/nginx.conf && cd /app/backend && npm start"
