@@ -65,7 +65,7 @@ app.use(compression());
  app.use(express.urlencoded({ extended: true }));
 
  // Serve frontend static files if they exist
- const frontendDist = join(process.cwd(), 'frontend', 'dist');
+ const frontendDist = '/app/frontend/dist';
  if (existsSync(frontendDist)) {
    app.use(express.static(frontendDist));
    console.log(`✓ Serving frontend from ${frontendDist}`);
