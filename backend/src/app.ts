@@ -133,7 +133,7 @@ app.get('/api-docs/swagger.json', (req, res) => {
 
   // SPA fallback: serve index.html for any non-API, non-file route
   app.get('*', (req, res, next) => {
-    // Skip API, docs, health, and any request that looks like a file (has a dot after last slash)
+    console.log(`[SPA] path=${req.path} skip=${req.path.startsWith('/api') || req.path.startsWith('/api-docs') || req.path === '/health' || req.path.includes('.')}`);
     if (
       req.path.startsWith('/api') ||
       req.path.startsWith('/api-docs') ||
@@ -144,6 +144,7 @@ app.get('/api-docs/swagger.json', (req, res) => {
     }
     const indexPath = join(frontendDist, 'index.html');
     if (existsSync(indexPath)) {
+      console.log(`[SPA] serving index.html for ${req.path}`);
       res.sendFile(indexPath);
     } else {
       next();
