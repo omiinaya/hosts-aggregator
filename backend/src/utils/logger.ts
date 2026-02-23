@@ -1,4 +1,7 @@
 import winston from 'winston';
+import { mkdirSync } from 'fs';
+
+mkdirSync('logs', { recursive: true });
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',

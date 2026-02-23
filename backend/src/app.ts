@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import compression from 'compression';
+
 import { errorMiddleware } from './middleware/error.middleware';
 import { loggingMiddleware } from './middleware/logging.middleware';
 import { apiRouter } from './routes';
@@ -40,44 +40,41 @@ app.use(
   })
 );
 
-// CORS configuration with proper origin validation
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3011'];
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  })
-);
+ // CORS: reflect request origin for simplicity
+ app.use(
+   cors({
+     origin: true,
+     credentials: true,
+     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+     allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+   })
+ );
 
 // Compression
-app.use(compression());
+// app.use(compression()); // disabled for debugging
 
  // Body parsing
  app.use(express.json({ limit: '10mb' }));
  app.use(express.urlencoded({ extended: true }));
 
- // Serve frontend static files if they exist
- const frontendDist = '/app/frontend/dist';
- if (existsSync(frontendDist)) {
-   try {
-     const files = readdirSync(frontendDist);
-     console.log(`✓ Frontend dist exists: ${frontendDist} (${files.length} items):`, files.slice(0, 10).join(', '));
-   } catch (err) {
-     console.error(`⚠ Cannot read frontend dist: ${err}`);
-   }
-   app.use(express.static(frontendDist));
-   console.log(`✓ Serving static files from ${frontendDist}`);
- } else {
-   console.error(`✗ Frontend dist NOT found at ${frontendDist}`);
- }
+  // Serve frontend static files if they exist
+  const frontendDist = '/app/frontend/dist';
+  if (existsSync(frontendDist)) {
+    try {
+      const files = readdirSync(frontendDist, { withFileTypes: true });
+      console.log(`✓ Frontend dist exists: ${frontendDist} (${files.length} items):`, files.slice(0, 10).map(f => f.name).join(', '));
+    } catch (err) {
+      console.error(`⚠ Cannot read frontend dist: ${err}`);
+    }
+    // Log each static request
+    app.use(frontendDist, (req, res, next) => {
+      console.log(`[STATIC] ${req.method} ${req.path}`);
+      next();
+    }, express.static(frontendDist));
+    console.log(`✓ Serving static files from ${frontendDist}`);
+  } else {
+    console.error(`✗ Frontend dist NOT found at ${frontendDist}`);
+  }
 
 // Debug logging for all requests
 app.use((req, res, next) => {
