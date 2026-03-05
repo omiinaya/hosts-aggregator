@@ -219,13 +219,15 @@ const Dashboard = () => {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button onClick={handleAggregate} disabled={aggregateMutation.isPending}>
-            {aggregateMutation.isPending ? (
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
+          <Button asChild>
+            <a
+              href={`${window.location.protocol}//${window.location.hostname}:3181/api/serve/hosts`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Play className="h-4 w-4 mr-2" />
-            )}
-            Aggregate Now
+              Test Aggregation
+            </a>
           </Button>
         </div>
       </div>
