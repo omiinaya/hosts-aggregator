@@ -601,35 +601,40 @@ export class AggregationService {
           continue;
         }
 
-        // Build bulk INSERT ... ON CONFLICT DO UPDATE statement
+        // Build and execute bulk INSERT ... ON CONFLICT DO UPDATE in chunks
+        // to avoid exceeding SQLite's parameter limit (max 999 by default)
+        const GROUP_CHUNK_SIZE = 140; // 140 groups * 7 params = 980 < 999
         const now = new Date();
-        const placeholders: string[] = [];
-        const params: any[] = [];
 
-        for (const group of groups) {
-          placeholders.push('(?, ?, ?, ?, ?, ?, ?)');
-          params.push(
-            group.domain,
-            group.normalized,
-            group.entryType,
-            sourceId,
-            now,
-            now,
-            group.count
-          );
+        for (let j = 0; j < groups.length; j += GROUP_CHUNK_SIZE) {
+          const chunk = groups.slice(j, j + GROUP_CHUNK_SIZE);
+          const placeholders: string[] = [];
+          const chunkParams: any[] = [];
+
+          for (const group of chunk) {
+            placeholders.push('(?, ?, ?, ?, ?, ?, ?)');
+            chunkParams.push(
+              group.domain,
+              group.normalized,
+              group.entryType,
+              sourceId,
+              now,
+              now,
+              group.count
+            );
+          }
+
+          const sql = `
+            INSERT INTO host_entries (domain, normalized, entryType, sourceId, firstSeen, lastSeen, occurrenceCount)
+            VALUES ${placeholders.join(', ')}
+            ON CONFLICT(domain, sourceId) DO UPDATE SET
+              entryType = excluded.entryType,
+              lastSeen = excluded.lastSeen,
+              occurrenceCount = host_entries.occurrenceCount + excluded.occurrenceCount
+          `;
+
+          await prisma.$executeRawUnsafe(sql, ...chunkParams);
         }
-
-        const sql = `
-          INSERT INTO host_entries (domain, normalized, entryType, sourceId, firstSeen, lastSeen, occurrenceCount)
-          VALUES ${placeholders.join(', ')}
-          ON CONFLICT(domain, sourceId) DO UPDATE SET
-            entryType = excluded.entryType,
-            lastSeen = excluded.lastSeen,
-            occurrenceCount = host_entries.occurrenceCount + excluded.occurrenceCount
-        `;
-
-        // Execute bulk upsert (single round-trip per batch)
-        await prisma.$executeRawUnsafe(sql, ...params);
 
         totalStored += batch.length;
         this.progress.entriesProcessed += batch.length;
