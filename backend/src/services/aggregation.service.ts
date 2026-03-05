@@ -559,9 +559,8 @@ export class AggregationService {
       return;
     }
 
-    // Process entries in batches to avoid transaction timeout
-    // Large sources like big.oisd.nl (~215,000 entries) need this approach
-    const BATCH_SIZE = 1000;
+    // Process entries in high-performance batches with bulk SQL
+    const BATCH_SIZE = 500; // Reduced to respect SQLite parameter limits
     const totalBatches = Math.ceil(entries.length / BATCH_SIZE);
     let totalStored = 0;
     let failedBatches = 0;
@@ -571,46 +570,72 @@ export class AggregationService {
       const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
 
       try {
-        // Use transaction for each batch with extended timeout
-        await prisma.$transaction(
-          async (tx) => {
-            // Batch upsert all entries in parallel within the batch
-            const upsertPromises = batch.map((entry) =>
-              tx.hostEntry.upsert({
-                where: {
-                  domain_sourceId: {
-                    domain: entry.domain,
-                    sourceId,
-                  },
-                },
-                update: {
-                  entryType: entry.type,
-                  lastSeen: new Date(),
-                  occurrenceCount: { increment: 1 },
-                },
-                create: {
-                  domain: entry.domain,
-                  normalized: entry.domain.toLowerCase().trim(),
-                  entryType: entry.type,
-                  sourceId,
-                  firstSeen: new Date(),
-                  lastSeen: new Date(),
-                  occurrenceCount: 1,
-                },
-              })
-            );
+        // Group entries by (domain, entryType) to count duplicates
+        const groupMap = new Map<
+          string,
+          {
+            domain: string;
+            normalized: string;
+            entryType: string;
+            count: number;
+          }
+        >();
 
-            await Promise.all(upsertPromises);
-          },
-          { timeout: 60000 } // 60 second timeout per batch
-        );
+        for (const entry of batch) {
+          const key = `${entry.domain}|${entry.type}`;
+          const existing = groupMap.get(key);
+          if (existing) {
+            existing.count++;
+          } else {
+            groupMap.set(key, {
+              domain: entry.domain,
+              normalized: entry.domain.toLowerCase().trim(),
+              entryType: entry.type,
+              count: 1,
+            });
+          }
+        }
+
+        const groups = Array.from(groupMap.values());
+        if (groups.length === 0) {
+          continue;
+        }
+
+        // Build bulk INSERT ... ON CONFLICT DO UPDATE statement
+        const now = new Date();
+        const placeholders: string[] = [];
+        const params: any[] = [];
+
+        for (const group of groups) {
+          placeholders.push('(?, ?, ?, ?, ?, ?, ?)');
+          params.push(
+            group.domain,
+            group.normalized,
+            group.entryType,
+            sourceId,
+            now,
+            now,
+            group.count
+          );
+        }
+
+        const sql = `
+          INSERT INTO host_entries (domain, normalized, entryType, sourceId, firstSeen, lastSeen, occurrenceCount)
+          VALUES ${placeholders.join(', ')}
+          ON CONFLICT(domain, sourceId) DO UPDATE SET
+            entryType = excluded.entryType,
+            lastSeen = excluded.lastSeen,
+            occurrenceCount = host_entries.occurrenceCount + excluded.occurrenceCount
+        `;
+
+        // Execute bulk upsert (single round-trip per batch)
+        await prisma.$executeRawUnsafe(sql, ...params);
 
         totalStored += batch.length;
-        // Increment progress for each batch
         this.progress.entriesProcessed += batch.length;
         if (totalBatches > 1) {
           logger.debug(
-            `Processed batch ${batchNumber}/${totalBatches} (${batch.length} entries) for source ${sourceId}`
+            `Processed batch ${batchNumber}/${totalBatches} (${batch.length} entries, ${groups.length} distinct) for source ${sourceId}`
           );
         }
       } catch (error) {
@@ -629,7 +654,9 @@ export class AggregationService {
           `(${failedBatches}/${totalBatches} batches failed)`
       );
     } else {
-      logger.info(`Stored ${totalStored} entries for source ${sourceId}`);
+      logger.info(
+        `Stored ${totalStored} entries (${totalStored} batches completed) for source ${sourceId}`
+      );
     }
   }
 
