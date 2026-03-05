@@ -8,20 +8,21 @@ datasource db {
 }
 
 model Source {
-  id                 String              @id @default(cuid())
-  name               String              @unique
-  url                String?
-  filePath           String?
-  type               String
-  enabled            Boolean             @default(true)
-  metadata           String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  format             String?             @default("auto")
-  aggregationSources AggregationSource[]
-  contentCache       SourceContent?
-  fetchLogs          SourceFetchLog[]
-  hosts              HostEntry[]
+  id                       String              @id @default(cuid())
+  name                     String              @unique
+  url                      String?
+  filePath                 String?
+  type                     String
+  enabled                  Boolean             @default(true)
+  metadata                 String?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  format                   String?             @default("auto")
+  aggregationSources       AggregationSource[]
+  contentCache             SourceContent?
+  fetchLogs                SourceFetchLog[]
+  hosts                    HostEntry[]
+  aggregationHostSources   AggregationHostSource[]
 
   @@index([enabled])
   @@index([type])
@@ -51,6 +52,7 @@ model HostEntry {
   @@index([sourceId])
   @@index([sourceId, domain])
   @@index([normalized, sourceId])
+  @@index([normalized, entryType]) // Composite index for querying domains by type
   @@map("host_entries")
 }
 
@@ -153,16 +155,29 @@ model AggregationHost {
   id                  String            @id @default(cuid())
   aggregationResultId String
   hostEntryId         String
-  sourceIds           String
   primarySourceId     String
   hostEntry           HostEntry         @relation(fields: [hostEntryId], references: [id], onDelete: Cascade)
   aggregationResult   AggregationResult @relation(fields: [aggregationResultId], references: [id], onDelete: Cascade)
+  sources             AggregationHostSource[]
 
   @@unique([aggregationResultId, hostEntryId])
   @@index([aggregationResultId])
   @@index([hostEntryId])
   @@index([primarySourceId])
   @@map("aggregation_hosts")
+}
+
+model AggregationHostSource {
+  id                String   @id @default(cuid())
+  aggregationHostId String
+  sourceId          String
+  source            Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  aggregationHost   AggregationHost @relation(fields: [aggregationHostId], references: [id], onDelete: Cascade)
+
+  @@unique([aggregationHostId, sourceId])
+  @@index([aggregationHostId])
+  @@index([sourceId])
+  @@map("aggregation_host_sources")
 }
 
 model User {

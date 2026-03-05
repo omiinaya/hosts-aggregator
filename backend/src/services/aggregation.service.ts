@@ -5,6 +5,14 @@ import { prisma } from '../config/database';
 import { AggregationStats, ParsedEntry } from '../types';
 import { logger } from '../utils/logger';
 
+export interface AggregationProgress {
+  totalSources: number;
+  processedSources: number;
+  currentSourceId: string | null;
+  status: 'idle' | 'running' | 'completed' | 'error';
+  entriesProcessed: number;
+}
+
 export class AggregationService {
   private parser: HostsParser;
   private progress: {
@@ -180,49 +188,115 @@ export class AggregationService {
         }
       }
 
-      // Create aggregation host records
+      // Build domain -> sources map from allEntries
       const domainToSources = new Map<string, string[]>();
       for (const entry of allEntries) {
-        if (entry.type === 'block' && !domainToSources.has(entry.domain)) {
-          domainToSources.set(entry.domain, []);
-        }
         if (entry.type === 'block') {
-          const sources = domainToSources.get(entry.domain)!;
-          if (!sources.includes(entry.source)) {
-            sources.push(entry.source);
+          const normalized = entry.domain.toLowerCase();
+          if (!domainToSources.has(normalized)) {
+            domainToSources.set(normalized, []);
+          }
+          const srcs = domainToSources.get(normalized)!;
+          if (!srcs.includes(entry.source)) {
+            srcs.push(entry.source);
           }
         }
       }
 
-      // Batch fetch all host entries for blocked domains
-      const normalizedDomains = result.blockedDomains.map((d) => d.toLowerCase());
-      const hostEntries = await prisma.hostEntry.findMany({
-        where: { normalized: { in: normalizedDomains } },
+      // Get all unique blocked domains (normalized)
+      const allDomains = Array.from(domainToSources.keys());
+
+      // Ensure all host entries exist (batch upsert)
+      const existingHostEntries = await prisma.hostEntry.findMany({
+        where: { normalized: { in: allDomains } },
         select: { id: true, normalized: true },
       });
+      const hostEntryMap = new Map(existingHostEntries.map((e) => [e.normalized, e.id]));
 
-      // Create a map for quick lookup
-      const entryMap = new Map(hostEntries.map((e) => [e.normalized, e.id]));
+      // Create missing host entries in a transaction
+      const missingDomains = allDomains.filter((d) => !hostEntryMap.has(d));
+      if (missingDomains.length > 0) {
+        const createdEntries = await prisma.$transaction(
+          missingDomains.map((domain) =>
+            prisma.hostEntry.create({
+              data: {
+                domain: domain,
+                normalized: domain,
+                entryType: 'block',
+                enabled: true,
+                occurrenceCount: 0,
+              },
+            })
+          )
+        );
+        for (const entry of createdEntries) {
+          hostEntryMap.set(entry.normalized, entry.id);
+        }
+      }
 
-      // Batch create aggregation hosts
-      const hostsToCreate = [];
-      for (const domain of result.blockedDomains) {
-        const normalized = domain.toLowerCase();
-        const entryId = entryMap.get(normalized);
-        if (entryId) {
-          const sourceIds = domainToSources.get(domain) || [];
-          hostsToCreate.push({
-            aggregationResultId: aggregationResult.id,
-            hostEntryId: entryId,
-            sourceIds: JSON.stringify(sourceIds),
-            primarySourceId: sourceIds[0] || '',
+      // Prepare aggregation hosts and their source links
+      const hostsToCreate: {
+        aggregationResultId: string;
+        hostEntryId: string;
+        primarySourceId: string;
+      }[] = [];
+      const hostSourcesToCreate: { aggregationHostId: string; sourceId: string }[] = [];
+
+      // For each domain, create an aggregationHost and link to sources
+      for (const [domain, sourceIds] of domainToSources) {
+        const hostEntryId = hostEntryMap.get(domain)!;
+        const uniqueSourceIds = [...new Set(sourceIds)];
+        hostsToCreate.push({
+          aggregationResultId: aggregationResult.id,
+          hostEntryId,
+          primarySourceId: uniqueSourceIds[0],
+        });
+      }
+
+      // Bulk create aggregation hosts
+      if (hostsToCreate.length > 0) {
+        await prisma.aggregationHost.createMany({
+          data: hostsToCreate,
+        });
+      }
+
+      // Now we need to get the IDs of the hosts we just created to link sources
+      const createdAggHosts = await prisma.aggregationHost.findMany({
+        where: {
+          aggregationResultId: aggregationResult.id,
+          hostEntryId: { in: hostsToCreate.map((h) => h.hostEntryId) },
+        },
+      });
+
+      const hostIdToAggHostId = new Map<string, string>();
+      for (const host of createdAggHosts) {
+        hostIdToAggHostId.set(host.hostEntryId, host.id);
+      }
+
+      // Build AggregationHostSource links
+      for (const [domain, sourceIds] of domainToSources) {
+        const hostEntryId = hostEntryMap.get(domain)!;
+        const aggregationHostId = hostIdToAggHostId.get(hostEntryId);
+        if (!aggregationHostId) continue;
+
+        for (const sourceId of [...new Set(sourceIds)]) {
+          hostSourcesToCreate.push({
+            aggregationHostId,
+            sourceId,
           });
         }
       }
 
-      if (hostsToCreate.length > 0) {
-        await prisma.aggregationHost.createMany({
-          data: hostsToCreate,
+      // Bulk insert source links (deduplicate to avoid unique constraint violations)
+      if (hostSourcesToCreate.length > 0) {
+        // Deduplicate by combination of aggregationHostId and sourceId
+        const uniqueLinks = Array.from(
+          new Map(
+            hostSourcesToCreate.map((link) => [`${link.aggregationHostId}|${link.sourceId}`, link])
+          ).values()
+        );
+        await prisma.aggregationHostSource.createMany({
+          data: uniqueLinks,
         });
       }
 
@@ -244,6 +318,10 @@ export class AggregationService {
 
   getProgress() {
     return { ...this.progress };
+  }
+
+  public updateProgress(updates: Partial<AggregationProgress>): void {
+    this.progress = { ...this.progress, ...updates };
   }
 
   private async fetchSourceContent(source: any): Promise<string> {
@@ -747,6 +825,269 @@ export class AggregationService {
         format: 'unknown',
         error: errorMessage,
       };
+    }
+  }
+
+  private async getLatestAggregationResultId(): Promise<string | null> {
+    const result = await prisma.aggregationResult.findFirst({
+      orderBy: { timestamp: 'desc' },
+      select: { id: true },
+    });
+    return result?.id || null;
+  }
+
+  /**
+   * Incrementally add a source to the aggregation tables.
+   * Uses normalized many-to-many schema via AggregationHostSource.
+   */
+  async incrementalAddSource(
+    sourceId: string
+  ): Promise<{ success: boolean; entriesProcessed: number; error?: string }> {
+    const startTime = Date.now();
+    logger.info(`[TIMING] incrementalAddSource START for source ${sourceId}`);
+
+    try {
+      const source = await prisma.source.findUnique({
+        where: { id: sourceId },
+        include: { contentCache: true },
+      });
+      logger.info(`[TIMING] Fetch source: ${Date.now() - startTime}ms`);
+
+      if (!source || !source.contentCache) {
+        return {
+          success: false,
+          entriesProcessed: 0,
+          error: 'Source not found or has no cached content',
+        };
+      }
+
+      const format = source.format || 'auto';
+      const entries = this.parser.parseContent(
+        source.contentCache.content,
+        sourceId,
+        format as any
+      );
+
+      if (entries.length === 0) {
+        return { success: true, entriesProcessed: 0 };
+      }
+
+      const latestAggregationResultId = await this.getLatestAggregationResultId();
+      logger.info(`[TIMING] Get latest aggregation result ID: ${Date.now() - startTime}ms`);
+      if (!latestAggregationResultId) {
+        throw new Error('No aggregation result exists. Run full aggregation first.');
+      }
+
+      // Build normalized domain -> [sourceId] map
+      const domainToSources = new Map<string, string[]>();
+      for (const entry of entries) {
+        if (entry.type === 'block') {
+          const normalized = entry.domain.toLowerCase();
+          if (!domainToSources.has(normalized)) {
+            domainToSources.set(normalized, []);
+          }
+          domainToSources.get(normalized)!.push(sourceId);
+        }
+      }
+      logger.info(
+        `[TIMING] Built domain map (${entries.length} entries -> ${domainToSources.size} domains): ${Date.now() - startTime}ms`
+      );
+
+      const blockedDomains = Array.from(domainToSources.keys());
+
+      // Ensure all host entries exist (batch upsert)
+      const existingHostEntries = await prisma.hostEntry.findMany({
+        where: { normalized: { in: blockedDomains } },
+        select: { id: true, normalized: true },
+      });
+      logger.info(
+        `[TIMING] Fetched existing host entries (${existingHostEntries.length} found): ${Date.now() - startTime}ms`
+      );
+      const hostEntryMap = new Map(existingHostEntries.map((e) => [e.normalized, e.id]));
+
+      const missingDomains = blockedDomains.filter((d) => !hostEntryMap.has(d));
+      if (missingDomains.length > 0) {
+        const newEntries = await prisma.$transaction(
+          missingDomains.map((domain) =>
+            prisma.hostEntry.create({
+              data: {
+                domain,
+                normalized: domain,
+                entryType: 'block',
+                enabled: true,
+                occurrenceCount: 0,
+              },
+            })
+          )
+        );
+        for (const entry of newEntries) {
+          hostEntryMap.set(entry.normalized, entry.id);
+        }
+      }
+
+      // Find existing aggregationHosts for these hostEntryIds
+      const hostEntryIds = Array.from(hostEntryMap.values());
+      const existingAggHosts = await prisma.aggregationHost.findMany({
+        where: {
+          aggregationResultId: latestAggregationResultId,
+          hostEntryId: { in: hostEntryIds },
+        },
+      });
+
+      const hostIdToAggHostId = new Map<string, string>();
+      for (const host of existingAggHosts) {
+        hostIdToAggHostId.set(host.hostEntryId, host.id);
+      }
+
+      // Prepare new aggregationHosts for domains without one
+      const newAggHosts: {
+        aggregationResultId: string;
+        hostEntryId: string;
+        primarySourceId: string;
+      }[] = [];
+      for (const domain of blockedDomains) {
+        const hostEntryId = hostEntryMap.get(domain)!;
+        if (!hostIdToAggHostId.has(hostEntryId)) {
+          newAggHosts.push({
+            aggregationResultId: latestAggregationResultId,
+            hostEntryId,
+            primarySourceId: sourceId,
+          });
+        }
+      }
+
+      if (newAggHosts.length > 0) {
+        await prisma.aggregationHost.createMany({
+          data: newAggHosts,
+        });
+
+        // Fetch IDs of newly created hosts
+        const createdHosts = await prisma.aggregationHost.findMany({
+          where: {
+            aggregationResultId: latestAggregationResultId,
+            hostEntryId: { in: newAggHosts.map((h) => h.hostEntryId) },
+          },
+        });
+        for (const host of createdHosts) {
+          hostIdToAggHostId.set(host.hostEntryId, host.id);
+        }
+      }
+
+      // Build AggregationHostSource links for all domains
+      const hostSourceLinks: { aggregationHostId: string; sourceId: string }[] = [];
+      for (const domain of blockedDomains) {
+        const hostEntryId = hostEntryMap.get(domain)!;
+        const aggHostId = hostIdToAggHostId.get(hostEntryId);
+        if (!aggHostId) continue;
+
+        hostSourceLinks.push({
+          aggregationHostId: aggHostId,
+          sourceId,
+        });
+      }
+
+      // Insert source links
+      if (hostSourceLinks.length > 0) {
+        // Deduplicate to avoid constraint violations
+        const uniqueLinks = Array.from(
+          new Map(
+            hostSourceLinks.map((link) => [`${link.aggregationHostId}|${link.sourceId}`, link])
+          ).values()
+        );
+        await prisma.aggregationHostSource.createMany({
+          data: uniqueLinks,
+        });
+      }
+
+      // Update source content cache entry count
+      await prisma.sourceContent.update({
+        where: { sourceId },
+        data: { entryCount: entries.length },
+      });
+
+      logger.info(
+        `Incremental add completed for source ${sourceId}: ${entries.length} entries in ${Date.now() - startTime}ms`
+      );
+
+      return { success: true, entriesProcessed: entries.length };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Incremental add failed for source ${sourceId}:`, error);
+      return { success: false, entriesProcessed: 0, error: errorMessage };
+    }
+  }
+
+  /**
+   * Incrementally remove a source from the aggregation tables.
+   * Uses normalized many-to-many schema.
+   */
+  async incrementalDeleteSource(
+    sourceId: string
+  ): Promise<{ success: boolean; entriesRemoved?: number; error?: string }> {
+    const startTime = Date.now();
+
+    try {
+      const latestAggregationResultId = await this.getLatestAggregationResultId();
+      if (!latestAggregationResultId) {
+        return { success: true, entriesRemoved: 0 };
+      }
+
+      // Find all AggregationHostSource links for this source within latest aggregation
+      const hostSourceLinks = await prisma.aggregationHostSource.findMany({
+        where: {
+          sourceId,
+          aggregationHost: {
+            aggregationResultId: latestAggregationResultId,
+          },
+        },
+        select: { aggregationHostId: true },
+      });
+
+      if (hostSourceLinks.length === 0) {
+        return { success: true, entriesRemoved: 0 };
+      }
+
+      const aggregationHostIds = hostSourceLinks.map((link) => link.aggregationHostId);
+
+      // Delete the links
+      await prisma.aggregationHostSource.deleteMany({
+        where: {
+          sourceId,
+          aggregationHostId: { in: aggregationHostIds },
+        },
+      });
+
+      // Check which aggregationHosts now have zero remaining links
+      const hostsToCheck = await prisma.aggregationHost.findMany({
+        where: { id: { in: aggregationHostIds } },
+      });
+
+      const hostsToDelete: string[] = [];
+      for (const host of hostsToCheck) {
+        const remaining = await prisma.aggregationHostSource.count({
+          where: { aggregationHostId: host.id },
+        });
+        if (remaining === 0) {
+          hostsToDelete.push(host.id);
+        }
+      }
+
+      if (hostsToDelete.length > 0) {
+        await prisma.aggregationHost.deleteMany({
+          where: { id: { in: hostsToDelete } },
+        });
+      }
+
+      const totalRemoved = hostsToDelete.length;
+      logger.info(
+        `Incremental delete completed for source ${sourceId}: removed ${totalRemoved} domain(s) in ${Date.now() - startTime}ms`
+      );
+
+      return { success: true, entriesRemoved: totalRemoved };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Incremental delete failed for source ${sourceId}:`, error);
+      return { success: false, error: errorMessage };
     }
   }
 }

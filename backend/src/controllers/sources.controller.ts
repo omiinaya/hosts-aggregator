@@ -160,12 +160,57 @@ export class SourcesController {
         success: true,
       };
 
-      // Trigger background aggregation if source is enabled
+      // Trigger incremental update if source is enabled (much faster than full aggregation)
       if (enabled) {
-        this.autoAggregationService.triggerAggregation().catch((error) => {
-          logger.error('Failed to trigger background aggregation after source creation:', error);
+        // Start progress tracking
+        aggregationService.updateProgress({
+          totalSources: 1,
+          currentSourceId: source.id,
+          status: 'running',
+          processedSources: 0,
+          entriesProcessed: 0,
         });
-        aggregationResult = null;
+
+        try {
+          // First, fetch and cache the source content
+          const processResult = await aggregationService.processSource(source);
+          if (!processResult.success) {
+            throw new Error(processResult.error || 'Failed to process source content');
+          }
+          // Then update aggregation tables incrementally
+          const addResult = await aggregationService.incrementalAddSource(source.id);
+          aggregationResult = {
+            success: addResult.success,
+            entriesProcessed: addResult.entriesProcessed,
+            ...(addResult.error && { error: addResult.error }),
+          };
+          // Mark completed
+          aggregationService.updateProgress({
+            status: 'completed',
+            processedSources: 1,
+            currentSourceId: null,
+          });
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          logger.error('Incremental add failed after source creation:', error);
+          // Mark error
+          aggregationService.updateProgress({
+            status: 'error',
+            currentSourceId: null,
+          });
+          // Fall back to background aggregation
+          this.autoAggregationService.triggerAggregation().catch(() => {});
+          aggregationResult = {
+            success: false,
+            error: `Incremental update failed: ${errorMessage}. Background aggregation scheduled.`,
+          };
+        }
+      } else {
+        // If source is not enabled, we should clear any running progress
+        aggregationService.updateProgress({
+          status: 'idle',
+          currentSourceId: null,
+        });
       }
 
       res.status(201).json({
@@ -233,15 +278,45 @@ export class SourcesController {
         urlChanged;
 
       if (shouldTriggerAggregation) {
+        // Start progress tracking
+        aggregationService.updateProgress({
+          totalSources: 1,
+          currentSourceId: source.id,
+          status: 'running',
+          processedSources: 0,
+          entriesProcessed: 0,
+        });
+
         try {
-          await aggregationService.aggregateSources();
-          logger.info('Immediate aggregation completed after source update');
-        } catch (error) {
-          logger.error('Failed to perform immediate aggregation after source update:', error);
-          // Fall back to background aggregation
-          this.autoAggregationService.triggerAggregation().catch((error) => {
-            logger.error('Failed to trigger background aggregation after source update:', error);
+          // If URL changed and source was enabled, remove old contributions first
+          if (urlChanged && existingSource.enabled) {
+            await aggregationService.incrementalDeleteSource(source.id);
+          }
+          // Process the updated source content (fetch if URL changed, or use existing cache)
+          const processResult = await aggregationService.processSource(source);
+          if (!processResult.success) {
+            throw new Error(processResult.error || 'Failed to process source content');
+          }
+          // Add updated source to aggregation
+          const addResult = await aggregationService.incrementalAddSource(source.id);
+          logger.info(
+            `Incremental update completed for source ${source.id}: ${addResult.entriesProcessed} entries`
+          );
+          // Mark completed
+          aggregationService.updateProgress({
+            status: 'completed',
+            processedSources: 1,
+            currentSourceId: null,
           });
+        } catch (error) {
+          logger.error('Incremental update failed after source update:', error);
+          // Mark error
+          aggregationService.updateProgress({
+            status: 'error',
+            currentSourceId: null,
+          });
+          // Fall back to background aggregation
+          this.autoAggregationService.triggerAggregation().catch(() => {});
         }
       }
 
@@ -275,17 +350,37 @@ export class SourcesController {
         where: { id },
       });
 
-      // Trigger immediate aggregation if source was enabled
+      // Trigger incremental removal if source was enabled
       if (source.enabled) {
+        // Start progress tracking
+        aggregationService.updateProgress({
+          totalSources: 1,
+          currentSourceId: id,
+          status: 'running',
+          processedSources: 0,
+          entriesProcessed: 0,
+        });
+
         try {
-          await aggregationService.aggregateSources();
-          logger.info('Immediate aggregation completed after source deletion');
-        } catch (error) {
-          logger.error('Failed to perform immediate aggregation after source deletion:', error);
-          // Fall back to background aggregation
-          this.autoAggregationService.triggerAggregation().catch((error) => {
-            logger.error('Failed to trigger background aggregation after source deletion:', error);
+          const result = await aggregationService.incrementalDeleteSource(id);
+          logger.info(
+            `Incremental delete completed for source ${id}: ${result.entriesRemoved} domains removed`
+          );
+          // Mark completed
+          aggregationService.updateProgress({
+            status: 'completed',
+            processedSources: 1,
+            currentSourceId: null,
           });
+        } catch (error) {
+          logger.error('Incremental delete failed after source deletion:', error);
+          // Mark error
+          aggregationService.updateProgress({
+            status: 'error',
+            currentSourceId: null,
+          });
+          // Fall back to background aggregation
+          this.autoAggregationService.triggerAggregation().catch(() => {});
         }
       }
 
@@ -308,6 +403,8 @@ export class SourcesController {
         return next(createError('Source not found', 404));
       }
 
+      const wasEnabled = source.enabled;
+
       const updatedSource = await prisma.source.update({
         where: { id },
         data: {
@@ -315,16 +412,48 @@ export class SourcesController {
         },
       });
 
-      // Always trigger immediate aggregation when toggling (enabled state changed)
+      // Start progress tracking for the toggle operation
+      aggregationService.updateProgress({
+        totalSources: 1,
+        currentSourceId: id,
+        status: 'running',
+        processedSources: 0,
+        entriesProcessed: 0,
+      });
+
+      // Always trigger immediate incremental update when toggling (enabled state changed)
       try {
-        await aggregationService.aggregateSources();
-        logger.info('Immediate aggregation completed after source toggle');
-      } catch (error) {
-        logger.error('Failed to perform immediate aggregation after source toggle:', error);
-        // Fall back to background aggregation
-        this.autoAggregationService.triggerAggregation().catch((error) => {
-          logger.error('Failed to trigger background aggregation after source toggle:', error);
+        if (wasEnabled && !updatedSource.enabled) {
+          // Disabling: remove contributions
+          await aggregationService.incrementalDeleteSource(id);
+          logger.info(`Incremental delete (toggle off) completed for source ${id}`);
+        } else if (!wasEnabled && updatedSource.enabled) {
+          // Enabling: add contributions
+          // Process source content first
+          const processResult = await aggregationService.processSource(updatedSource);
+          if (!processResult.success) {
+            throw new Error(processResult.error || 'Failed to process source content');
+          }
+          const addResult = await aggregationService.incrementalAddSource(id);
+          logger.info(
+            `Incremental add (toggle on) completed for source ${id}: ${addResult.entriesProcessed} entries`
+          );
+        }
+        // Mark completed
+        aggregationService.updateProgress({
+          status: 'completed',
+          processedSources: 1,
+          currentSourceId: null,
         });
+      } catch (error) {
+        logger.error('Incremental toggle failed:', error);
+        // Mark error
+        aggregationService.updateProgress({
+          status: 'error',
+          currentSourceId: null,
+        });
+        // Fall back to background aggregation
+        this.autoAggregationService.triggerAggregation().catch(() => {});
       }
 
       res.json({
@@ -363,6 +492,15 @@ export class SourcesController {
         });
       }
 
+      // Start progress tracking
+      aggregationService.updateProgress({
+        totalSources: 1,
+        currentSourceId: id,
+        status: 'running',
+        processedSources: 0,
+        entriesProcessed: 0,
+      });
+
       // Process this single source
       const result = await aggregationService.processSource(source);
 
@@ -375,8 +513,20 @@ export class SourcesController {
       }
 
       if (!result.success) {
+        // Mark error
+        aggregationService.updateProgress({
+          status: 'error',
+          currentSourceId: null,
+        });
         return next(createError(result.error || 'Failed to refresh source', 500));
       }
+
+      // Mark completed
+      aggregationService.updateProgress({
+        status: 'completed',
+        processedSources: 1,
+        currentSourceId: null,
+      });
 
       res.json({
         status: 'success',

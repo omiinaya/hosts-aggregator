@@ -25,7 +25,7 @@ export class HostsController {
       const search = req.query.search as string | undefined;
       const sourceId = req.query.sourceId as string | undefined;
 
-      // Build where clause
+      // Build where clause for hostEntry
       const where: any = {};
       if (enabled !== undefined) {
         where.enabled = enabled;
@@ -39,19 +39,96 @@ export class HostsController {
           { normalized: { contains: search.toLowerCase() } },
         ];
       }
-      if (sourceId) {
-        where.sourceId = sourceId;
-      }
+      // Note: sourceId filter now needs to apply after we join via AggregationHostSource,
+      // but for simplicity we'll filter in memory after fetching if sourceId is provided.
+      // For performance we could join in the database, but that's more complex.
 
       // Get total count
       const total = await prisma.hostEntry.count({ where });
 
-      // Get hosts with pagination
+      // Get hosts with pagination (without source info initially)
       const hosts = await prisma.hostEntry.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { lastSeen: 'desc' },
+      });
+
+      if (hosts.length === 0) {
+        return res.json({
+          status: 'success',
+          data: {
+            hosts: [],
+            pagination: { page, limit, total, totalPages: 0 },
+          },
+        });
+      }
+
+      // Get the latest aggregation result ID
+      const latestAggregationResult = await prisma.aggregationResult.findFirst({
+        orderBy: { timestamp: 'desc' },
+        select: { id: true },
+      });
+
+      if (!latestAggregationResult) {
+        // No aggregation yet, return hosts with empty sources
+        const formattedHosts = hosts.map((host) => ({
+          id: host.id,
+          domain: host.domain,
+          entryType: host.entryType,
+          enabled: host.enabled,
+          occurrenceCount: host.occurrenceCount,
+          firstSeen: host.firstSeen.toISOString(),
+          lastSeen: host.lastSeen.toISOString(),
+          sources: [],
+        }));
+        return res.json({
+          status: 'success',
+          data: {
+            hosts: formattedHosts,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+          },
+        });
+      }
+
+      const hostIds = hosts.map((h) => h.id);
+
+      // Find all aggregationHosts for these hostEntries in the latest aggregation
+      const aggregationHosts = await prisma.aggregationHost.findMany({
+        where: {
+          aggregationResultId: latestAggregationResult.id,
+          hostEntryId: { in: hostIds },
+        },
+      });
+
+      if (aggregationHosts.length === 0) {
+        // No aggregation hosts found, return empty sources
+        const formattedHosts = hosts.map((host) => ({
+          id: host.id,
+          domain: host.domain,
+          entryType: host.entryType,
+          enabled: host.enabled,
+          occurrenceCount: host.occurrenceCount,
+          firstSeen: host.firstSeen.toISOString(),
+          lastSeen: host.lastSeen.toISOString(),
+          sources: [],
+        }));
+        return res.json({
+          status: 'success',
+          data: {
+            hosts: formattedHosts,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+          },
+        });
+      }
+
+      const aggregationHostIds = aggregationHosts.map((h) => h.id);
+
+      // Fetch all AggregationHostSource links with source details
+      const hostSources = await prisma.aggregationHostSource.findMany({
+        where: {
+          aggregationHostId: { in: aggregationHostIds },
+        },
         include: {
           source: {
             select: {
@@ -63,6 +140,26 @@ export class HostsController {
         },
       });
 
+      // Build map: hostEntryId -> array of source objects
+      const hostEntryIdToSources = new Map<
+        string,
+        Array<{ id: string; name: string; enabled: boolean }>
+      >();
+      for (const hostSource of hostSources) {
+        const hostEntryId = aggregationHosts.find(
+          (h) => h.id === hostSource.aggregationHostId
+        )?.hostEntryId;
+        if (!hostEntryId) continue;
+        if (!hostEntryIdToSources.has(hostEntryId)) {
+          hostEntryIdToSources.set(hostEntryId, []);
+        }
+        hostEntryIdToSources.get(hostEntryId)!.push({
+          id: hostSource.source.id,
+          name: hostSource.source.name,
+          enabled: hostSource.source.enabled,
+        });
+      }
+
       // Format response
       const formattedHosts = hosts.map((host) => ({
         id: host.id,
@@ -72,28 +169,28 @@ export class HostsController {
         occurrenceCount: host.occurrenceCount,
         firstSeen: host.firstSeen.toISOString(),
         lastSeen: host.lastSeen.toISOString(),
-        sources: host.source
-          ? [
-              {
-                id: host.source.id,
-                name: host.source.name,
-                enabled: host.source.enabled,
-              },
-            ]
-          : [],
+        sources: hostEntryIdToSources.get(host.id) || [],
       }));
+
+      // If sourceId filter is applied, filter hosts to only those that have that source
+      let filteredHosts = formattedHosts;
+      if (sourceId) {
+        filteredHosts = formattedHosts.filter((host) =>
+          host.sources.some((s) => s.id === sourceId)
+        );
+      }
 
       const totalPages = Math.ceil(total / limit);
 
       res.json({
         status: 'success',
         data: {
-          hosts: formattedHosts,
+          hosts: filteredHosts,
           pagination: {
             page,
             limit,
-            total,
-            totalPages,
+            total: sourceId ? filteredHosts.length : total, // Adjust total if filtered
+            totalPages: sourceId ? 1 : totalPages,
           },
         },
       });
@@ -113,20 +210,52 @@ export class HostsController {
 
       const host = await prisma.hostEntry.findUnique({
         where: { id },
-        include: {
-          source: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              enabled: true,
-            },
-          },
-        },
       });
 
       if (!host) {
         return next(createError('Host not found', 404));
+      }
+
+      // Get the latest aggregation result
+      const latestAggregationResult = await prisma.aggregationResult.findFirst({
+        orderBy: { timestamp: 'desc' },
+        select: { id: true },
+      });
+
+      let sources: Array<{ id: string; name: string; enabled: boolean }> = [];
+
+      if (latestAggregationResult) {
+        // Find the aggregationHost for this hostEntry in the latest aggregation
+        const aggregationHost = await prisma.aggregationHost.findFirst({
+          where: {
+            aggregationResultId: latestAggregationResult.id,
+            hostEntryId: host.id,
+          },
+        });
+
+        if (aggregationHost) {
+          // Fetch the sources for this aggregationHost
+          const hostSources = await prisma.aggregationHostSource.findMany({
+            where: {
+              aggregationHostId: aggregationHost.id,
+            },
+            include: {
+              source: {
+                select: {
+                  id: true,
+                  name: true,
+                  enabled: true,
+                },
+              },
+            },
+          });
+
+          sources = hostSources.map((hs) => ({
+            id: hs.source.id,
+            name: hs.source.name,
+            enabled: hs.source.enabled,
+          }));
+        }
       }
 
       // Format response
@@ -139,16 +268,7 @@ export class HostsController {
         occurrenceCount: host.occurrenceCount,
         firstSeen: host.firstSeen.toISOString(),
         lastSeen: host.lastSeen.toISOString(),
-        sources: host.source
-          ? [
-              {
-                id: host.source.id,
-                name: host.source.name,
-                type: host.source.type,
-                enabled: host.source.enabled,
-              },
-            ]
-          : [],
+        sources,
       };
 
       res.json({
@@ -304,14 +424,12 @@ export class HostsController {
    */
   async getHostStats(req: Request, res: Response, next: NextFunction) {
     try {
-      // Get total counts
+      // Get total counts from hostEntry table
       const total = await prisma.hostEntry.count();
       const enabled = await prisma.hostEntry.count({
         where: { enabled: true },
       });
-      const disabled = await prisma.hostEntry.count({
-        where: { enabled: false },
-      });
+      const disabled = total - enabled;
 
       // Get counts by entry type
       const blockCount = await prisma.hostEntry.count({
@@ -324,42 +442,60 @@ export class HostsController {
         where: { entryType: 'element' },
       });
 
-      // Get counts by source
-      const sourceCounts = await prisma.hostEntry.groupBy({
-        by: ['sourceId'],
-        _count: {
-          id: true,
-        },
-        where: {
-          sourceId: { not: null },
-        },
+      // Get counts by source from the latest aggregation
+      const latestAggregationResult = await prisma.aggregationResult.findFirst({
+        orderBy: { timestamp: 'desc' },
+        select: { id: true },
       });
 
-      // Create source map for quick lookup
-      const sourceIds = sourceCounts
-        .map((sc) => sc.sourceId)
-        .filter((id): id is string => id !== null);
-      const sources = await prisma.source.findMany({
-        where: {
-          id: { in: sourceIds },
-        },
-        select: {
-          id: true,
-          name: true,
-        },
-      });
+      let bySource: Array<{ sourceId: string; sourceName: string; hostCount: number }> = [];
 
-      const sourceMap = new Map(sources.map((s) => [s.id, s.name]));
+      if (latestAggregationResult) {
+        // Get all aggregationHosts for this aggregation result
+        const aggregationHosts = await prisma.aggregationHost.findMany({
+          where: {
+            aggregationResultId: latestAggregationResult.id,
+          },
+          include: {
+            sources: {
+              include: {
+                source: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        });
 
-      // Format by source data
-      const bySource = sourceCounts
-        .filter((sc) => sc.sourceId !== null)
-        .map((sc) => ({
-          sourceId: sc.sourceId,
-          sourceName: sourceMap.get(sc.sourceId!) || 'Unknown',
-          hostCount: sc._count.id,
-        }))
-        .sort((a, b) => b.hostCount - a.hostCount);
+        // Build a map: sourceId -> count of hostEntries (domains)
+        const sourceCountMap = new Map<string, number>();
+
+        for (const host of aggregationHosts) {
+          for (const hostSource of host.sources) {
+            const sourceId = hostSource.sourceId;
+            const current = sourceCountMap.get(sourceId) || 0;
+            sourceCountMap.set(sourceId, current + 1);
+          }
+        }
+
+        bySource = Array.from(sourceCountMap.entries())
+          .map(([sourceId, count]) => {
+            // Find source name from any hostSource (we could also query sources table)
+            let sourceName = 'Unknown';
+            for (const host of aggregationHosts) {
+              const src = host.sources.find((s) => s.sourceId === sourceId);
+              if (src) {
+                sourceName = src.source.name;
+                break;
+              }
+            }
+            return { sourceId, sourceName, hostCount: count };
+          })
+          .sort((a, b) => b.hostCount - a.hostCount);
+      }
 
       res.json({
         status: 'success',
