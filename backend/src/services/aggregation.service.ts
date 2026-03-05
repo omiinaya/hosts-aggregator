@@ -960,11 +960,11 @@ export class AggregationService {
       }
 
       // Find existing aggregationHosts for these hostEntryIds
-      const hostEntryIds = Array.from(hostEntryMap.values());
+      const hostEntryIdsAll = Array.from(hostEntryMap.values());
       const existingAggHosts = await prisma.aggregationHost.findMany({
         where: {
           aggregationResultId: latestAggregationResultId,
-          hostEntryId: { in: hostEntryIds },
+          hostEntryId: { in: hostEntryIdsAll },
         },
       });
 
@@ -973,20 +973,33 @@ export class AggregationService {
         hostIdToAggHostId.set(host.hostEntryId, host.id);
       }
 
-      // Prepare new aggregationHosts for domains without one
+      // Build mapping: domain -> array of hostEntryIds (there can be multiple host entries for same domain)
+      const domainToHostEntryIds = new Map<string, string[]>();
+      for (const host of existingHostEntries) {
+        const list = domainToHostEntryIds.get(host.normalized) || [];
+        list.push(host.id);
+        domainToHostEntryIds.set(host.normalized, list);
+      }
+
+      // Prepare new aggregationHosts for domains that have no aggregationHost yet
       const newAggHosts: {
         aggregationResultId: string;
         hostEntryId: string;
         primarySourceId: string;
       }[] = [];
       for (const domain of blockedDomains) {
-        const hostEntryId = hostEntryMap.get(domain)!;
-        if (!hostIdToAggHostId.has(hostEntryId)) {
-          newAggHosts.push({
-            aggregationResultId: latestAggregationResultId,
-            hostEntryId,
-            primarySourceId: sourceId,
-          });
+        const hostIds = domainToHostEntryIds.get(domain) || [];
+        // Check if any hostEntry for this domain already has an AggregationHost
+        const existingLink = hostIds.find((id) => hostIdToAggHostId.has(id));
+        if (!existingLink) {
+          // No AggregationHost exists for this domain; pick the first hostEntry as canonical
+          if (hostIds.length > 0) {
+            newAggHosts.push({
+              aggregationResultId: latestAggregationResultId,
+              hostEntryId: hostIds[0],
+              primarySourceId: sourceId,
+            });
+          }
         }
       }
 
@@ -1010,14 +1023,15 @@ export class AggregationService {
       // Build AggregationHostSource links for all domains
       const hostSourceLinks: { aggregationHostId: string; sourceId: string }[] = [];
       for (const domain of blockedDomains) {
-        const hostEntryId = hostEntryMap.get(domain)!;
-        const aggHostId = hostIdToAggHostId.get(hostEntryId);
-        if (!aggHostId) continue;
-
-        hostSourceLinks.push({
-          aggregationHostId: aggHostId,
-          sourceId,
-        });
+        const hostIds = domainToHostEntryIds.get(domain) || [];
+        // Find the AggregationHost ID that corresponds to this domain (any hostEntry that has an AggregationHost)
+        const aggHostId = hostIds.find((id) => hostIdToAggHostId.has(id));
+        if (aggHostId) {
+          hostSourceLinks.push({
+            aggregationHostId: aggHostId,
+            sourceId,
+          });
+        }
       }
 
       // Insert source links
