@@ -1,18 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import { AggregationService } from '../services/aggregation.service';
-import { createError } from '../middleware/error.middleware';
+import { aggregationService } from '../services/aggregation.service';
 import { logger } from '../utils/logger';
 
 export class AggregateController {
-  private aggregationService: AggregationService;
-
-  constructor() {
-    this.aggregationService = new AggregationService();
-  }
+  constructor() {}
 
   async aggregate(req: Request, res: Response, next: NextFunction) {
     try {
-      const stats = await this.aggregationService.aggregateSources();
+      const stats = await aggregationService.aggregateSources();
 
       res.json({
         status: 'success',
@@ -26,10 +21,15 @@ export class AggregateController {
 
   async getAggregated(req: Request, res: Response, next: NextFunction) {
     try {
-      const latestAggregation = await this.aggregationService.getLatestAggregation();
+      const latestAggregation = await aggregationService.getLatestAggregation();
 
       if (!latestAggregation) {
-        return next(createError('No aggregation results found', 404));
+        // Return empty data instead of 404
+        return res.json({
+          status: 'success',
+          data: null,
+          message: 'No aggregation results yet. Add sources and trigger aggregation.',
+        });
       }
 
       res.json({
@@ -44,7 +44,7 @@ export class AggregateController {
 
   async getAggregationStats(req: Request, res: Response, next: NextFunction) {
     try {
-      const stats = await this.aggregationService.getAggregationStats();
+      const stats = await aggregationService.getAggregationStats();
 
       res.json({
         status: 'success',
@@ -59,7 +59,7 @@ export class AggregateController {
   async getAggregationHistory(req: Request, res: Response, next: NextFunction) {
     try {
       // Return latest aggregation with source details
-      const latestAggregation = await this.aggregationService.getLatestAggregation();
+      const latestAggregation = await aggregationService.getLatestAggregation();
 
       res.json({
         status: 'success',
@@ -73,9 +73,8 @@ export class AggregateController {
 
   async getAggregationStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      // For now, return a simple status
-      // In a real implementation, this would check if aggregation is running
-      const latestAggregation = await this.aggregationService.getLatestAggregation();
+      // For now, return a simple status based on latest aggregation
+      const latestAggregation = await aggregationService.getLatestAggregation();
 
       res.json({
         status: 'success',
@@ -88,6 +87,19 @@ export class AggregateController {
       });
     } catch (error) {
       logger.error('Failed to get aggregation status:', error);
+      next(error);
+    }
+  }
+
+  async getProgress(req: Request, res: Response, next: NextFunction) {
+    try {
+      const progress = aggregationService.getProgress();
+      res.json({
+        status: 'success',
+        data: progress,
+      });
+    } catch (error) {
+      logger.error('Failed to get aggregation progress:', error);
       next(error);
     }
   }

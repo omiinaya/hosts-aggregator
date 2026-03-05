@@ -6,23 +6,29 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Progress } from '../components/ui/progress'
 import { Switch } from '../components/ui/switch'
-import { useSources, useCreateSource, useUpdateSource, useDeleteSource, useRefreshSource } from '../hooks/useSources'
-import { Source } from '../types'
-import { Plus, Edit, Trash2, ExternalLink, RefreshCw, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+ import { useSources, useCreateSource, useUpdateSource, useDeleteSource, useRefreshSource } from '../hooks/useSources'
+ import { useAggregationProgress } from '../hooks/useAggregationProgress'
+ import { Source } from '../types'
+ import { Plus, Edit, Trash2, ExternalLink, RefreshCw, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 
 const Sources = () => {
-  const { data: sources, isLoading, error } = useSources()
-  const createSource = useCreateSource()
-  const updateSource = useUpdateSource()
-  const deleteSource = useDeleteSource()
-  const refreshSource = useRefreshSource()
+   const { data: sources, isLoading, error } = useSources()
+   const createSource = useCreateSource()
+   const updateSource = useUpdateSource()
+   const deleteSource = useDeleteSource()
+   const refreshSource = useRefreshSource()
 
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [editingSource, setEditingSource] = useState<Source | null>(null)
-  const [deleteSourceId, setDeleteSourceId] = useState<string | null>(null)
-  const [refreshingId, setRefreshingId] = useState<string | null>(null)
+   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+   const [editingSource, setEditingSource] = useState<Source | null>(null)
+   const [deleteSourceId, setDeleteSourceId] = useState<string | null>(null)
+   const [refreshingId, setRefreshingId] = useState<string | null>(null)
 
-  const [formData, setFormData] = useState({
+   const { data: progress } = useAggregationProgress()
+
+   // Find current source name for display
+   const currentSourceName = sources?.find(s => s.id === progress?.currentSourceId)?.name
+
+   const [formData, setFormData] = useState({
     name: '',
     url: '',
     enabled: true,
@@ -30,39 +36,28 @@ const Sources = () => {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    createSource.mutate(formData, {
-      onSuccess: () => {
-        setIsCreateDialogOpen(false)
-        setFormData({ name: '', url: '', enabled: true })
-      },
-      onError: () => {
-        // Error is handled by toast in the hook
-      }
-    })
+    // Close modal immediately for better UX
+    setIsCreateDialogOpen(false)
+    setFormData({ name: '', url: '', enabled: true })
+    // Mutation will handle toast notifications via hook
+    createSource.mutate(formData)
   }
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingSource) return
-    
-    updateSource.mutate({
-      id: editingSource.id,
-      ...formData
-    }, {
-      onSuccess: () => {
-        setEditingSource(null)
-        setFormData({ name: '', url: '', enabled: true })
-      }
-    })
+    const sourceId = editingSource.id
+    // Close modal immediately
+    setEditingSource(null)
+    setFormData({ name: '', url: '', enabled: true })
+    updateSource.mutate({ id: sourceId, ...formData })
   }
 
   const handleDelete = () => {
     if (!deleteSourceId) return
-    deleteSource.mutate(deleteSourceId, {
-      onSuccess: () => {
-        setDeleteSourceId(null)
-      }
-    })
+    const id = deleteSourceId
+    setDeleteSourceId(null)
+    deleteSource.mutate(id)
   }
 
   const handleEdit = (source: Source) => {
@@ -197,14 +192,19 @@ const Sources = () => {
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeleteSourceId(source.id)}
-                    title="Delete source"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     onClick={() => setDeleteSourceId(source.id)}
+                     title="Delete source"
+                     disabled={deleteSource.isPending}
+                   >
+                     {deleteSource.isPending ? (
+                       <Loader2 className="h-4 w-4 animate-spin" />
+                     ) : (
+                       <Trash2 className="h-4 w-4" />
+                     )}
+                   </Button>
                   <a href={source.url} target="_blank" rel="noopener noreferrer" title="Open source URL">
                     <Button
                       variant="outline"
@@ -235,15 +235,39 @@ const Sources = () => {
         )}
       </div>
 
-      {/* Loading Progress Bar for Create/Delete Operations */}
-      {(createSource.isPending || deleteSource.isPending) && (
-        <div className="mt-4">
-          <Progress value={undefined} className="animate-pulse" />
-          <p className="text-sm text-muted-foreground mt-2 text-center">
-            {createSource.isPending ? 'Creating source...' : 'Deleting source...'}
-          </p>
-        </div>
-      )}
+        {/* Progress Banner for ongoing aggregation */}
+        {progress?.status === 'running' && (
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-3" />
+                <p className="text-blue-800 font-medium">
+                  Aggregating hosts...
+                </p>
+              </div>
+              <span className="text-blue-700 font-semibold">
+                {Math.round(((progress?.processedSources || 0) / (progress?.totalSources || 1)) * 100)}%
+              </span>
+            </div>
+            <Progress 
+              value={((progress?.processedSources || 0) / (progress?.totalSources || 1)) * 100} 
+              className="h-2"
+            />
+            <p className="text-xs text-blue-600 mt-2">
+              {currentSourceName 
+                ? `Processing: ${currentSourceName} • ${progress?.entriesProcessed?.toLocaleString() || 0} entries`
+                : `Processing source ${progress?.processedSources || 0} of ${progress?.totalSources || 0} • ${progress?.entriesProcessed?.toLocaleString() || 0} entries aggregated`}
+            </p>
+          </div>
+        )}
+
+        {/* Delete loading indicator */}
+        {deleteSource.isPending && (
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-3" />
+            <p className="text-blue-800 font-medium">Deleting source...</p>
+          </div>
+        )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={isCreateDialogOpen || !!editingSource} onOpenChange={(open) => {

@@ -5,7 +5,7 @@ import { useSources } from '../../hooks/useSources';
 import { ReactNode } from 'react';
 
 // Set up the API base URL before importing hooks
-const API_BASE_URL = 'http://localhost:3010';
+const API_BASE_URL = 'http://localhost:3181';
 
 const createWrapper = () => {
   const queryClient = new QueryClient({

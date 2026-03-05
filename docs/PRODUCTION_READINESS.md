@@ -81,7 +81,7 @@ DATABASE_URL="postgresql://user:password@postgres:5432/hosts_aggregator"
 
 - **postgres**: PostgreSQL database (port 5432)
 - **redis**: Redis cache (port 6379)
-- **backend**: API server (port 3010)
+- **backend**: API server (port 3181)
 - **frontend**: React app (port 80)
 
 ### Volumes
@@ -258,7 +258,7 @@ Results are saved to `./benchmarks/benchmark-YYYYMMDD-HHMMSS.txt`
 The application exposes metrics at `/metrics`:
 
 ```bash
-curl http://localhost:3010/metrics
+curl http://localhost:3181/metrics
 ```
 
 Key metrics:

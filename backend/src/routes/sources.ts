@@ -12,6 +12,9 @@ const sourcesController = new SourcesController();
 // GET /api/sources - List all sources
 router.get('/', sourcesController.getAllSources.bind(sourcesController));
 
+// GET /api/sources/health - Get health status of all sources
+router.get('/health', sourcesController.getSourceHealth.bind(sourcesController));
+
 // GET /api/sources/:id - Get specific source
 router.get('/:id', validateIdParam, sourcesController.getSourceById.bind(sourcesController));
 

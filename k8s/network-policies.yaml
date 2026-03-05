@@ -38,7 +38,7 @@ spec:
               app.kubernetes.io/name: ingress-nginx
       ports:
         - protocol: TCP
-          port: 3010
+          port: 3181
 ---
 # Allow ingress from nginx-ingress to frontend
 apiVersion: networking.k8s.io/v1
@@ -165,7 +165,7 @@ spec:
               component: backend
       ports:
         - protocol: TCP
-          port: 3010
+          port: 3181
 ---
 # Allow backup to PostgreSQL
 apiVersion: networking.k8s.io/v1

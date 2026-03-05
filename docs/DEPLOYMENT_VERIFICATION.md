@@ -172,7 +172,7 @@ Create `verify-deployment.sh`:
 set -e
 
 # Configuration
-BASE_URL="${BASE_URL:-http://localhost:3010}"
+BASE_URL="${BASE_URL:-http://localhost:3181}"
 API_URL="${BASE_URL}/api"
 TIMEOUT=30
 
@@ -263,7 +263,7 @@ Create `full-verification.sh`:
 #!/bin/bash
 set -e
 
-BASE_URL="${BASE_URL:-http://localhost:3010}"
+BASE_URL="${BASE_URL:-http://localhost:3181}"
 API_URL="${BASE_URL}/api"
 OUTPUT_DIR="./verification-results-$(date +%Y%m%d-%H%M%S)"
 
@@ -529,7 +529,7 @@ Manual verification checklist:
 pgrep -f "node.*backend" || echo "Backend not running"
 
 # Check ports
-netstat -tlnp | grep 3010 || ss -tlnp | grep 3010
+netstat -tlnp | grep 3181 || ss -tlnp | grep 3181
 
 # Check logs
 tail -f backend/logs/app.log

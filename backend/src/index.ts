@@ -2,7 +2,7 @@
 import { app } from './app';
 import { logger } from './utils/logger';
 
-const PORT = parseInt(process.env.PORT || '3010', 10);
+const PORT = parseInt(process.env.PORT || '3181', 10);
 
 console.log('========================================');
 console.log('Hosts Aggregator Backend');

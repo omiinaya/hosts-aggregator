@@ -1120,12 +1120,12 @@ DATABASE_URL="file:./dev.db"
 REDIS_URL="redis://localhost:6379"
 JWT_SECRET="your-secret-key"
 LOG_LEVEL="info"
-PORT=3010
+PORT=3181
 ```
 
 **Frontend (.env):**
 ```
-VITE_API_BASE_URL=http://localhost:3010/api
+VITE_API_BASE_URL=http://localhost:3181/api
 VITE_SENTRY_DSN=your-sentry-dsn
 ```
 

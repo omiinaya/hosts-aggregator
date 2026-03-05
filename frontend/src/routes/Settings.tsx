@@ -25,7 +25,7 @@ const Settings = () => {
 
   const handleReset = () => {
     setSettings({
-      apiUrl: 'http://192.168.1.35:3010/api',
+      apiUrl: 'http://192.168.1.35:3181/api',
       autoRefresh: true,
       refreshInterval: '5',
       theme: 'system',
@@ -64,7 +64,7 @@ const Settings = () => {
                   id="apiUrl"
                   value={settings.apiUrl}
                   onChange={(e) => setSettings({ ...settings, apiUrl: e.target.value })}
-                  placeholder="http://192.168.1.35:3010/api"
+                  placeholder="http://192.168.1.35:3181/api"
                 />
               </div>
               <div>

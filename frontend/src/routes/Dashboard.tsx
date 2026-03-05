@@ -181,7 +181,7 @@ const Dashboard = () => {
       title: 'Download Hosts',
       description: 'Get the unified hosts file',
       icon: Download,
-      href: `${window.location.protocol}//${window.location.hostname}:3010/api/serve/hosts`,
+      href: `${window.location.protocol}//${window.location.hostname}:3181/api/serve/hosts`,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       external: true,

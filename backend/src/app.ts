@@ -59,9 +59,13 @@ const app = express();
  app.use(express.json({ limit: '10mb' }));
  app.use(express.urlencoded({ extended: true }));
 
-   // Serve frontend static files if they exist
-   const frontendDist = '/app/frontend/dist';
-   if (existsSync(frontendDist)) {
+    // Serve frontend static files if they exist
+    // In development: ../frontend/dist (relative to backend directory)
+    // In production/Docker: /app/frontend/dist
+    const frontendDist = process.env.NODE_ENV === 'production' 
+      ? '/app/frontend/dist' 
+      : '../frontend/dist';
+    if (existsSync(frontendDist)) {
      try {
        const files = readdirSync(frontendDist, { withFileTypes: true });
        console.log(`✓ Frontend dist exists: ${frontendDist} (${files.length} items):`, files.slice(0, 10).map(f => f.name).join(', '));

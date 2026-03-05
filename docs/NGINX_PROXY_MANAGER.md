@@ -68,7 +68,7 @@ This setup serves both frontend and backend from the same domain with different 
    - Domain Names: `hosts.yourdomain.com`
    - Scheme: `http`
    - Forward Hostname/IP: `hosts-aggregator-backend` (or your backend container name/IP)
-   - Forward Port: `3010`
+   - Forward Port: `3181`
 
 3. **Custom Locations Tab:**
    
@@ -79,7 +79,7 @@ This setup serves both frontend and backend from the same domain with different 
    Location: /api
    Scheme: http
    Forward Hostname: hosts-aggregator-backend
-   Forward Port: 3010
+   Forward Port: 3181
    ```
 
    **Location 2: Serve Endpoint**
@@ -87,7 +87,7 @@ This setup serves both frontend and backend from the same domain with different 
    Location: /serve
    Scheme: http
    Forward Hostname: hosts-aggregator-backend
-   Forward Port: 3010
+   Forward Port: 3181
    ```
 
    **Location 3: Health Checks**
@@ -95,7 +95,7 @@ This setup serves both frontend and backend from the same domain with different 
    Location: /health
    Scheme: http
    Forward Hostname: hosts-aggregator-backend
-   Forward Port: 3010
+   Forward Port: 3181
    ```
 
 4. **Advanced Tab:**
@@ -103,7 +103,7 @@ This setup serves both frontend and backend from the same domain with different 
    ```nginx
    # CORS headers for API
    location /api {
-       proxy_pass http://hosts-aggregator-backend:3010;
+       proxy_pass http://hosts-aggregator-backend:3181;
        proxy_http_version 1.1;
        proxy_set_header Upgrade $http_upgrade;
        proxy_set_header Connection 'upgrade';
@@ -150,7 +150,7 @@ This setup uses separate subdomains for frontend and backend.
    - Domain Names: `api.hosts.yourdomain.com`
    - Scheme: `http`
    - Forward Hostname: `hosts-aggregator-backend`
-   - Forward Port: `3010`
+   - Forward Port: `3181`
 
 2. **SSL Tab:**
    - Request a new SSL certificate
@@ -181,10 +181,10 @@ hosts.yourdomain.com/docs/   → Swagger documentation
 
 **Custom Locations:**
 
-1. `/api` → Backend:3010
-2. `/serve` → Backend:3010
-3. `/health` → Backend:3010
-4. `/api-docs` → Backend:3010
+1. `/api` → Backend:3181
+2. `/serve` → Backend:3181
+3. `/health` → Backend:3181
+4. `/api-docs` → Backend:3181
 5. `/` → Frontend:80
 
 ## Advanced Configuration
@@ -200,7 +200,7 @@ limit_req zone=api_limit burst=20 nodelay;
 
 location /api {
     limit_req zone=api_limit;
-    proxy_pass http://hosts-aggregator-backend:3010;
+    proxy_pass http://hosts-aggregator-backend:3181;
     # ... rest of config
 }
 ```
@@ -209,7 +209,7 @@ location /api {
 
 ```nginx
 location /api/ws {
-    proxy_pass http://hosts-aggregator-backend:3010;
+    proxy_pass http://hosts-aggregator-backend:3181;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -232,7 +232,7 @@ location /serve {
     allow 10.0.0.0/8;
     deny all;
     
-    proxy_pass http://hosts-aggregator-backend:3010;
+    proxy_pass http://hosts-aggregator-backend:3181;
     # ... rest of config
 }
 ```
@@ -283,7 +283,7 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hosts_aggregator
       - REDIS_URL=redis://redis:6379
-      - PORT=3010
+      - PORT=3181
     depends_on:
       - postgres
       - redis
@@ -353,7 +353,7 @@ Update `frontend/src/hooks/useApiStatus.ts`:
 ```typescript
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
   (window.location.hostname.includes('localhost') 
-    ? 'http://localhost:3010' 
+    ? 'http://localhost:3181' 
     : '/api');  // Use relative path for production
 ```
 
@@ -438,15 +438,15 @@ pihole restartdns
 If currently accessing directly:
 
 1. **Before migration:**
-   - Note current backend URL (e.g., `http://server:3010`)
+   - Note current backend URL (e.g., `http://server:3181`)
    - Note current frontend URL (e.g., `http://server:3011`)
 
 2. **Update frontend environment:**
-   - Change `VITE_API_BASE_URL` from `http://server:3010` to `/api`
+   - Change `VITE_API_BASE_URL` from `http://server:3181` to `/api`
    - Rebuild and redeploy
 
 3. **Update any clients:**
-   - Change bookmarks from `http://server:3010` to `https://hosts.yourdomain.com`
+   - Change bookmarks from `http://server:3181` to `https://hosts.yourdomain.com`
    - Update Pi-hole adlist URLs
    - Update any automation scripts
 

@@ -19,4 +19,7 @@ router.get('/history', aggregateController.getAggregationHistory.bind(aggregateC
 // GET /api/aggregate/status - Get aggregation status
 router.get('/status', aggregateController.getAggregationStatus.bind(aggregateController));
 
+// GET /api/aggregate/progress - Get real-time aggregation progress
+router.get('/progress', aggregateController.getProgress.bind(aggregateController));
+
 export { router as aggregateRouter };

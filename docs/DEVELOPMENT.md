@@ -58,7 +58,7 @@ npm run dev
    cd backend
    npm run dev
    ```
-   The backend will run on `http://localhost:3010`
+   The backend will run on `http://localhost:3181`
 
 2. **Start the frontend development server:**
    ```bash
@@ -208,10 +208,10 @@ Output format is selected via query parameter:
 
 ```bash
 # ABP format (default)
-curl http://localhost:3010/api/serve/hosts
+curl http://localhost:3181/api/serve/hosts
 
 # Standard format
-curl http://localhost:3010/api/serve/hosts?format=standard
+curl http://localhost:3181/api/serve/hosts?format=standard
 ```
 
 ### Format Detection
@@ -239,13 +239,13 @@ Test format detection and conversion:
 
 ```bash
 # Test ABP format
-curl http://localhost:3010/api/serve/abp
+curl http://localhost:3181/api/serve/abp
 
 # Test standard format
-curl http://localhost:3010/api/serve/hosts?format=standard
+curl http://localhost:3181/api/serve/hosts?format=standard
 
 # Test format detection
-curl -X POST http://localhost:3010/api/sources \
+curl -X POST http://localhost:3181/api/sources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test Source",
@@ -377,7 +377,7 @@ npm run type-check   # TypeScript type checking
 Create `backend/.env` file:
 
 ```env
-PORT=3010
+PORT=3181
 NODE_ENV=development
 DATABASE_URL="file:./dev.db"
 CACHE_DIR="./data/cache"
@@ -394,7 +394,7 @@ RATE_LIMIT_MAX_REQUESTS=100
 Create `frontend/.env` file:
 
 ```env
-VITE_API_BASE_URL=http://localhost:3010/api
+VITE_API_BASE_URL=http://localhost:3181/api
 VITE_APP_NAME="Hosts Aggregator"
 VITE_APP_VERSION=1.0.0
 VITE_LOG_LEVEL="info"
@@ -492,14 +492,14 @@ npx prisma studio
 ### Common Issues
 
 **Backend won't start:**
-- Check if port 3010 is available
+- Check if port 3181 is available
 - Verify database connection
 - Check environment variables
 
 **Frontend won't connect to backend:**
-- Verify backend is running on port 3010
+- Verify backend is running on port 3181
 - Check CORS configuration
-- Verify API base URL is set to http://localhost:3010/api
+- Verify API base URL is set to http://localhost:3181/api
 
 **Database issues:**
 - Run database migrations

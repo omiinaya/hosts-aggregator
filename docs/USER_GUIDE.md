@@ -258,7 +258,7 @@ Set up automatic aggregation:
 **Using Cron**:
 ```bash
 # Run aggregation every hour
-0 * * * * curl -X POST http://localhost:3010/api/aggregated
+0 * * * * curl -X POST http://localhost:3181/api/aggregated
 ```
 
 **Using Application Scheduler**:
@@ -289,7 +289,7 @@ The serve endpoint provides your unified hosts file to DNS filters like Pi-hole,
 
 1. **Get Your URL**:
    ```
-   http://your-server:3010/api/serve/hosts/raw?format=standard
+   http://your-server:3181/api/serve/hosts/raw?format=standard
    ```
 
 2. **Add to Pi-hole**:
@@ -312,7 +312,7 @@ Create a script for automatic updates:
 #!/bin/bash
 # /etc/pihole/update-custom.sh
 
-SERVER="http://your-server:3010"
+SERVER="http://your-server:3181"
 PIHOLE_DIR="/etc/pihole"
 
 # Download latest hosts
@@ -338,7 +338,7 @@ Add to crontab:
 1. **Add Filter List**:
    - Go to **Filters** → **DNS blocklists**
    - Click **Add blocklist**
-   - Enter URL: `http://your-server:3010/api/serve/hosts/raw?format=standard`
+   - Enter URL: `http://your-server:3181/api/serve/hosts/raw?format=standard`
    - Name: "Hosts Aggregator"
    - Click **Save**
 
@@ -351,7 +351,7 @@ Add to crontab:
 
 1. Open extension settings
 2. Go to **Custom filters**
-3. Add filter URL: `http://your-server:3010/api/serve/abp/raw`
+3. Add filter URL: `http://your-server:3181/api/serve/abp/raw`
 4. Click **Subscribe**
 
 ### uBlock Origin Integration
@@ -362,7 +362,7 @@ Add to crontab:
 2. Go to **Filter lists** tab
 3. Scroll to **Custom** section
 4. Check **Import** checkbox
-5. Enter URL: `http://your-server:3010/api/serve/abp/raw`
+5. Enter URL: `http://your-server:3181/api/serve/abp/raw`
 6. Click **Apply changes**
 7. Click **Update now**
 
@@ -427,11 +427,11 @@ SERVE_AUTH_TOKEN=your-secure-token-here
 
 ```bash
 # Add token to URL
-curl "http://your-server:3010/api/serve/hosts/raw?format=standard&token=your-token"
+curl "http://your-server:3181/api/serve/hosts/raw?format=standard&token=your-token"
 
 # Or use header
 curl -H "Authorization: Bearer your-token" \
-  "http://your-server:3010/api/serve/hosts/raw?format=standard"
+  "http://your-server:3181/api/serve/hosts/raw?format=standard"
 ```
 
 ---
@@ -510,7 +510,7 @@ Visual representations:
 **Via API**:
 ```bash
 curl -o backup-$(date +%Y%m%d).json \
-  http://localhost:3010/api/config/backup
+  http://localhost:3181/api/config/backup
 ```
 
 #### Database Backup
@@ -549,7 +549,7 @@ Full backup includes:
 curl -X POST \
   -H "Content-Type: application/json" \
   -d @backup-file.json \
-  http://localhost:3010/api/config/restore
+  http://localhost:3181/api/config/restore
 ```
 
 ### Automated Backups
@@ -598,7 +598,7 @@ pg_restore --list backup-file.dump
 **Bearer Token**:
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3010/api/sources
+  http://localhost:3181/api/sources
 ```
 
 ### Core Endpoints
@@ -760,7 +760,7 @@ Common status codes:
 **Solutions**:
 1. Check if backend is running:
    ```bash
-   curl http://localhost:3010/health
+   curl http://localhost:3181/health
    ```
 
 2. Verify frontend URL:
@@ -821,7 +821,7 @@ Common status codes:
 **Solutions**:
 1. Verify serve endpoint is accessible:
    ```bash
-   curl http://your-server:3010/api/serve/hosts/raw
+   curl http://your-server:3181/api/serve/hosts/raw
    ```
 
 2. Check firewall settings
@@ -884,7 +884,7 @@ Common status codes:
 
 3. **Health Check**:
    ```bash
-   curl http://localhost:3010/health
+   curl http://localhost:3181/health
    ```
 
 4. **Run Diagnostics**:

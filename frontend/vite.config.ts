@@ -18,13 +18,18 @@ export default defineConfig({
     port: 3011,
     host: '0.0.0.0',
     allowedHosts: ['hosts.mrxlab.net', 'localhost', '127.0.0.1'],
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3010',
-        changeOrigin: true,
-        secure: false
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3181',
+          changeOrigin: true,
+          secure: false
+        },
+        '/health': {
+          target: 'http://localhost:3181',
+          changeOrigin: true,
+          secure: false
+        }
       }
-    }
   },
   build: {
     outDir: 'dist',

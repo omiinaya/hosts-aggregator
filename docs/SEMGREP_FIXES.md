@@ -633,7 +633,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --chown=nodejs:nodejs package.json .
 
 USER nodejs
-EXPOSE 3010
+EXPOSE 3181
 
 # Security options
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

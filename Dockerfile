@@ -79,12 +79,12 @@ RUN chown -R nodejs:nodejs /app && \
     chown -R nginx:nginx /etc/nginx/conf.d
 
 # Expose ports
-EXPOSE 80 3010
+EXPOSE 80 3181
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:80/ && \
-        node -e "require('http').get('http://localhost:3010/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
+        node -e "require('http').get('http://localhost:3181/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 
 # Start both services
 CMD ["/app/start.sh"]

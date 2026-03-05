@@ -5,7 +5,7 @@
 All API endpoints are prefixed with `/api`:
 
 ```
-http://localhost:3010/api
+http://localhost:3181/api
 ```
 
 ## Output Formats
@@ -337,7 +337,7 @@ CORS is configured to allow requests from:
 ### Creating a New Source
 
 ```bash
-curl -X POST http://localhost:3010/api/sources \
+curl -X POST http://localhost:3181/api/sources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "StevenBlack Hosts",
@@ -349,7 +349,7 @@ curl -X POST http://localhost:3010/api/sources \
 ### Triggering Aggregation
 
 ```bash
-curl -X POST http://localhost:3010/api/aggregated
+curl -X POST http://localhost:3181/api/aggregated
 ```
 
 ### Serving Hosts File
@@ -358,16 +358,16 @@ The hosts file is served dynamically from the database. Use the serve endpoints:
 
 ```bash
 # Get hosts file in ABP format (default)
-curl http://localhost:3010/api/serve/hosts
+curl http://localhost:3181/api/serve/hosts
 
 # Get raw hosts file in ABP format (no headers)
-curl http://localhost:3010/api/serve/hosts/raw
+curl http://localhost:3181/api/serve/hosts/raw
 
 # Get hosts file in standard format
-curl http://localhost:3010/api/serve/hosts?format=standard
+curl http://localhost:3181/api/serve/hosts?format=standard
 
 # Get raw hosts file in standard format
-curl http://localhost:3010/api/serve/hosts/raw?format=standard
+curl http://localhost:3181/api/serve/hosts/raw?format=standard
 ```
 
 ## Serving Endpoints
@@ -439,8 +439,8 @@ curl http://localhost:3010/api/serve/hosts/raw?format=standard
     "entries": 1000,
     "totalSources": 3,
     "generatedAt": "2026-01-31T19:00:00.000Z",
-    "downloadUrl": "http://localhost:3010/api/serve/hosts",
-    "rawDownloadUrl": "http://localhost:3010/api/serve/hosts/raw"
+    "downloadUrl": "http://localhost:3181/api/serve/hosts",
+    "rawDownloadUrl": "http://localhost:3181/api/serve/hosts/raw"
   }
 }
 ```

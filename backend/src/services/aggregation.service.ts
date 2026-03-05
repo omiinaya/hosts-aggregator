@@ -7,9 +7,23 @@ import { logger } from '../utils/logger';
 
 export class AggregationService {
   private parser: HostsParser;
+  private progress: {
+    totalSources: number;
+    processedSources: number;
+    currentSourceId: string | null;
+    status: 'idle' | 'running' | 'completed' | 'error';
+    entriesProcessed: number;
+  };
 
   constructor() {
     this.parser = new HostsParser();
+    this.progress = {
+      totalSources: 0,
+      processedSources: 0,
+      currentSourceId: null,
+      status: 'idle',
+      entriesProcessed: 0,
+    };
   }
 
   async aggregateSources(): Promise<AggregationStats> {
@@ -22,6 +36,13 @@ export class AggregationService {
       });
 
       if (sources.length === 0) {
+        this.progress = {
+          totalSources: 0,
+          processedSources: 0,
+          currentSourceId: null,
+          status: 'completed',
+          entriesProcessed: 0,
+        };
         return {
           totalSources: 0,
           totalEntries: 0,
@@ -33,6 +54,15 @@ export class AggregationService {
         };
       }
 
+      // Initialize progress
+      this.progress = {
+        totalSources: sources.length,
+        processedSources: 0,
+        currentSourceId: null,
+        status: 'running',
+        entriesProcessed: 0,
+      };
+
       const allEntries: ParsedEntry[] = [];
       const processedSources: string[] = [];
       const sourceStats: Map<string, { entries: number; duration: number; status: string }> =
@@ -40,6 +70,7 @@ export class AggregationService {
 
       // Process all sources in parallel
       const processingPromises = sources.map(async (source) => {
+        this.progress.currentSourceId = source.id;
         const sourceStartTime = Date.now();
         try {
           // Verify source still exists before processing
@@ -75,6 +106,7 @@ export class AggregationService {
           // Log successful fetch
           await this.logSourceFetch(source.id, 'SUCCESS', 200, null, duration, entries.length);
 
+          this.progress.processedSources++;
           return { sourceId: source.id, entries };
         } catch (error) {
           const duration = Date.now() - sourceStartTime;
@@ -90,16 +122,24 @@ export class AggregationService {
             logger.warn(`Could not log fetch error for source ${source.id}:`, logError);
           }
 
+          this.progress.processedSources++;
           return null;
         }
       });
 
       const processingResults = await Promise.all(processingPromises);
 
+      // All sources processed, mark as completed
+      this.progress.status = 'completed';
+      this.progress.currentSourceId = null;
+
       // Collect results from successful sources
       for (const result of processingResults) {
         if (result) {
-          allEntries.push(...result.entries);
+          // Push entries one by one to avoid stack overflow with large arrays
+          for (const entry of result.entries) {
+            allEntries.push(entry);
+          }
           processedSources.push(result.sourceId);
         }
       }
@@ -196,9 +236,14 @@ export class AggregationService {
         allowedDomains: result.allowedDomains,
       };
     } catch (error) {
+      this.progress.status = 'error';
       logger.error('Aggregation failed:', error);
       throw error;
     }
+  }
+
+  getProgress() {
+    return { ...this.progress };
   }
 
   private async fetchSourceContent(source: any): Promise<string> {
@@ -483,6 +528,8 @@ export class AggregationService {
         );
 
         totalStored += batch.length;
+        // Increment progress for each batch
+        this.progress.entriesProcessed += batch.length;
         if (totalBatches > 1) {
           logger.debug(
             `Processed batch ${batchNumber}/${totalBatches} (${batch.length} entries) for source ${sourceId}`
@@ -703,3 +750,5 @@ export class AggregationService {
     }
   }
 }
+
+export const aggregationService = new AggregationService();

@@ -14,7 +14,7 @@ interface ServeInfo {
   message: string
 }
 
-const API_BASE_URL = 'http://192.168.1.35:3010'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3181';
 
 const useApiStatus = () => {
   const [status, setStatus] = useState<ApiStatus>({
@@ -30,7 +30,7 @@ const useApiStatus = () => {
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
     try {
-      const response = await fetch(`${API_BASE_URL}/health`, {
+      const response = await fetch('/health', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -55,7 +55,7 @@ const useApiStatus = () => {
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/serve/health`, {
+      const response = await fetch(`${API_BASE_URL}/serve/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'

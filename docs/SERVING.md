@@ -34,35 +34,35 @@ The hosts aggregator supports two output formats:
 ## Available Endpoints
 
 ### Main Hosts File (ABP Format - Default)
-- **URL**: `http://your-server:3010/api/serve/hosts`
+- **URL**: `http://your-server:3181/api/serve/hosts`
 - **Content-Type**: `text/plain`
 - **Description**: Serves the complete unified hosts file in ABP format with headers
 - **Query Parameters**:
   - `format` (optional): `abp` (default) or `standard`
 
 ### Raw Hosts File (ABP Format - Default)
-- **URL**: `http://your-server:3010/api/serve/hosts/raw`
+- **URL**: `http://your-server:3181/api/serve/hosts/raw`
 - **Content-Type**: `text/plain`
 - **Description**: Serves only the domain blocking entries in ABP format (no comments/headers)
 - **Query Parameters**:
   - `format` (optional): `abp` (default) or `standard`
 
 ### ABP Format Endpoints
-- **URL**: `http://your-server:3010/api/serve/abp`
+- **URL**: `http://your-server:3181/api/serve/abp`
 - **Content-Type**: `text/plain`
 - **Description**: Serves hosts file in ABP format with headers (explicit endpoint)
 
-- **URL**: `http://your-server:3010/api/serve/abp/raw`
+- **URL**: `http://your-server:3181/api/serve/abp/raw`
 - **Content-Type**: `text/plain`
 - **Description**: Serves hosts file in ABP format without headers (explicit endpoint)
 
 ### Hosts File Information
-- **URL**: `http://your-server:3010/api/serve/hosts/info`
+- **URL**: `http://your-server:3181/api/serve/hosts/info`
 - **Content-Type**: `application/json`
 - **Description**: Returns metadata about the current hosts file
 
 ### Health Check
-- **URL**: `http://your-server:3010/api/serve/health`
+- **URL**: `http://your-server:3181/api/serve/health`
 - **Content-Type**: `application/json`
 - **Description**: Health check endpoint for monitoring
 
@@ -75,7 +75,7 @@ The hosts aggregator supports two output formats:
 3. Scroll to **Custom** section
 4. Add a new filter:
    ```
-   http://your-server:3010/api/serve/abp
+   http://your-server:3181/api/serve/abp
    ```
 5. Click **Apply changes**
 
@@ -83,7 +83,7 @@ The hosts aggregator supports two output formats:
 
 For a cleaner filter without headers:
 ```
-http://your-server:3010/api/serve/abp/raw
+http://your-server:3181/api/serve/abp/raw
 ```
 
 ## AdGuard Configuration
@@ -94,7 +94,7 @@ http://your-server:3010/api/serve/abp/raw
 2. Navigate to **Filters** → **DNS blocklists**
 3. Add a new custom filter:
    - **Name**: Hosts Aggregator
-   - **URL**: `http://your-server:3010/api/serve/abp`
+   - **URL**: `http://your-server:3181/api/serve/abp`
    - **Type**: AdBlock-style
 
 ### Method 2: Hosts File
@@ -109,7 +109,7 @@ http://your-server:3010/api/serve/abp/raw
 2. Create a script to update the file:
    ```bash
    #!/bin/bash
-   curl -s http://localhost:3010/api/serve/abp/raw > /path/to/hosts-aggregator/hosts.txt
+   curl -s http://localhost:3181/api/serve/abp/raw > /path/to/hosts-aggregator/hosts.txt
    systemctl restart AdGuardHome
    ```
 
@@ -121,7 +121,7 @@ http://your-server:3010/api/serve/abp/raw
 2. Navigate to **Settings** → **Blocklists**
 3. Add a new custom blocklist:
    ```
-   http://your-server:3010/api/serve/hosts/raw?format=standard
+   http://your-server:3181/api/serve/hosts/raw?format=standard
    ```
 4. Click **Save**
 5. Update Gravity: **Tools** → **Update Gravity**
@@ -131,7 +131,7 @@ http://your-server:3010/api/serve/abp/raw
 1. Create a script to download the hosts file periodically:
    ```bash
    #!/bin/bash
-   curl -s http://localhost:3010/api/serve/hosts/raw?format=standard > /etc/pihole/custom.list
+   curl -s http://localhost:3181/api/serve/hosts/raw?format=standard > /etc/pihole/custom.list
    pihole restartdns
    ```
 
@@ -150,7 +150,7 @@ Add these to your `.env` file in the backend directory:
 ```bash
 # Serving configuration
 SERVE_ENABLED=true
-SERVE_PORT=3010
+SERVE_PORT=3181
 SERVE_HOST=0.0.0.0
 
 # Auto-aggregation
@@ -177,12 +177,12 @@ The default output format is ABP (AdBlock Plus). To use standard format:
 
 - **ABP Format (Default)**: No query parameter needed
   ```
-  http://your-server:3010/api/serve/hosts
+  http://your-server:3181/api/serve/hosts
   ```
 
 - **Standard Format**: Add `?format=standard` query parameter
   ```
-  http://your-server:3010/api/serve/hosts?format=standard
+  http://your-server:3181/api/serve/hosts?format=standard
   ```
 
 Both formats are available on all serve endpoints.
@@ -198,7 +198,7 @@ SERVE_AUTH_TOKEN=your-secure-token-here
 
 Then configure your DNS filter to use the token:
 ```
-http://your-server:3010/api/serve/hosts/raw?token=your-secure-token-here
+http://your-server:3181/api/serve/hosts/raw?token=your-secure-token-here
 ```
 
 Or use HTTP Basic Auth:
@@ -221,7 +221,7 @@ Updates typically complete within 5-10 seconds depending on the number of source
 ### Health Check
 Monitor the service using the health endpoint:
 ```bash
-curl http://localhost:3010/api/serve/health
+curl http://localhost:3181/api/serve/health
 ```
 
 ### Logs
@@ -233,7 +233,7 @@ tail -f /path/to/backend/logs/app.log
 ### File Information
 Get current file stats:
 ```bash
-curl http://localhost:3010/api/serve/hosts/info
+curl http://localhost:3181/api/serve/hosts/info
 ```
 
 ## Performance Considerations
@@ -254,7 +254,7 @@ curl http://localhost:3010/api/serve/hosts/info
 2. **Connection refused**
    - Verify the backend server is running
    - Check firewall settings
-   - Confirm the correct port (default: 3010)
+   - Confirm the correct port (default: 3181)
 
 3. **Authentication failures**
    - Check `SERVE_AUTH_TOKEN` environment variable
@@ -287,7 +287,7 @@ For production use, consider:
 ### uBlock Origin Update Script
 ```bash
 #!/bin/bash
-SERVER_URL="http://localhost:3010"
+SERVER_URL="http://localhost:3181"
 TOKEN="your-token-if-enabled"
 
 # Download ABP format filter
@@ -301,7 +301,7 @@ fi
 ### AdGuard Update Script
 ```bash
 #!/bin/bash
-SERVER_URL="http://localhost:3010"
+SERVER_URL="http://localhost:3181"
 TOKEN="your-token-if-enabled"
 HOSTS_FILE="/opt/AdGuardHome/hosts-aggregator.txt"
 
@@ -319,7 +319,7 @@ systemctl restart AdGuardHome
 ### Pi-hole Update Script
 ```bash
 #!/bin/bash
-SERVER_URL="http://localhost:3010"
+SERVER_URL="http://localhost:3181"
 TOKEN="your-token-if-enabled"
 
 # Download hosts file in standard format

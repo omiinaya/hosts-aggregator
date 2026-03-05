@@ -5,7 +5,7 @@
 set -e
 
 # Configuration
-API_URL="${API_URL:-http://localhost:3010}"
+API_URL="${API_URL:-http://localhost:3181}"
 DB_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/hosts_aggregator}"
 DURATION="${DURATION:-30}"
 CONCURRENT_USERS="${CONCURRENT_USERS:-10}"

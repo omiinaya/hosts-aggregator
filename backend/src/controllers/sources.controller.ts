@@ -3,17 +3,15 @@ import { prisma } from '../config/database';
 import { createError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
 import { AutoAggregationService } from '../services/auto-aggregation.service';
-import { AggregationService } from '../services/aggregation.service';
+import { aggregationService } from '../services/aggregation.service';
 import { HostsParser } from '../services/parser.service';
 
 export class SourcesController {
   private autoAggregationService: AutoAggregationService;
-  private aggregationService: AggregationService;
   private parser: HostsParser;
 
   constructor() {
     this.autoAggregationService = new AutoAggregationService();
-    this.aggregationService = new AggregationService();
     this.parser = new HostsParser();
   }
 
@@ -154,31 +152,20 @@ export class SourcesController {
       });
 
       // Track aggregation result to return to frontend
-      let aggregationResult: { success: boolean; error?: string; entriesProcessed?: number } = {
+      let aggregationResult: {
+        success: boolean;
+        error?: string;
+        entriesProcessed?: number;
+      } | null = {
         success: true,
       };
 
-      // Trigger immediate aggregation if source is enabled
+      // Trigger background aggregation if source is enabled
       if (enabled) {
-        try {
-          const result = await this.aggregationService.aggregateSources();
-          logger.info('Immediate aggregation completed after source creation');
-          aggregationResult = {
-            success: true,
-            entriesProcessed: result.totalEntries,
-          };
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          logger.error('Failed to perform immediate aggregation after source creation:', error);
-          // Fall back to background aggregation
-          this.autoAggregationService.triggerAggregation().catch((error) => {
-            logger.error('Failed to trigger background aggregation after source creation:', error);
-          });
-          aggregationResult = {
-            success: false,
-            error: `Aggregation failed: ${errorMessage}. Background aggregation has been triggered.`,
-          };
-        }
+        this.autoAggregationService.triggerAggregation().catch((error) => {
+          logger.error('Failed to trigger background aggregation after source creation:', error);
+        });
+        aggregationResult = null;
       }
 
       res.status(201).json({
@@ -247,7 +234,7 @@ export class SourcesController {
 
       if (shouldTriggerAggregation) {
         try {
-          await this.aggregationService.aggregateSources();
+          await aggregationService.aggregateSources();
           logger.info('Immediate aggregation completed after source update');
         } catch (error) {
           logger.error('Failed to perform immediate aggregation after source update:', error);
@@ -291,7 +278,7 @@ export class SourcesController {
       // Trigger immediate aggregation if source was enabled
       if (source.enabled) {
         try {
-          await this.aggregationService.aggregateSources();
+          await aggregationService.aggregateSources();
           logger.info('Immediate aggregation completed after source deletion');
         } catch (error) {
           logger.error('Failed to perform immediate aggregation after source deletion:', error);
@@ -330,7 +317,7 @@ export class SourcesController {
 
       // Always trigger immediate aggregation when toggling (enabled state changed)
       try {
-        await this.aggregationService.aggregateSources();
+        await aggregationService.aggregateSources();
         logger.info('Immediate aggregation completed after source toggle');
       } catch (error) {
         logger.error('Failed to perform immediate aggregation after source toggle:', error);
@@ -377,7 +364,7 @@ export class SourcesController {
       }
 
       // Process this single source
-      const result = await this.aggregationService.processSource(source);
+      const result = await aggregationService.processSource(source);
 
       // Restore original enabled state
       if (!wasEnabled) {
@@ -425,7 +412,7 @@ export class SourcesController {
 
       // Trigger immediate aggregation to re-fetch content
       try {
-        await this.aggregationService.aggregateSources();
+        await aggregationService.aggregateSources();
         logger.info('Immediate aggregation completed after cache refresh');
       } catch (error) {
         logger.error('Failed to perform immediate aggregation after cache refresh:', error);
@@ -461,7 +448,7 @@ export class SourcesController {
 
       // Trigger immediate aggregation to re-fetch all content
       try {
-        await this.aggregationService.aggregateSources();
+        await aggregationService.aggregateSources();
         logger.info('Immediate aggregation completed after bulk cache refresh');
       } catch (error) {
         logger.error('Failed to perform immediate aggregation after bulk cache refresh:', error);
@@ -605,6 +592,92 @@ export class SourcesController {
       });
     } catch (error) {
       logger.error(`Failed to detect format for source ${req.params.id}:`, error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get health status of all sources
+   * GET /api/sources/health
+   *
+   * Returns aggregated health information about all sources based on their latest fetch logs.
+   */
+  async getSourceHealth(req: Request, res: Response, next: NextFunction) {
+    try {
+      // Get all sources with their latest fetch log
+      const sources = await prisma.source.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: {
+          fetchLogs: {
+            orderBy: { fetchedAt: 'desc' },
+            take: 1,
+            select: {
+              status: true,
+              fetchedAt: true,
+              errorMessage: true,
+              responseTimeMs: true,
+            },
+          },
+        },
+      });
+
+      // Calculate health stats
+      let healthy = 0;
+      let unhealthy = 0;
+      let unknown = 0;
+      const sourceHealthList = sources.map((source) => {
+        const latestLog = source.fetchLogs[0];
+        let status: 'healthy' | 'unhealthy' | 'unknown' = 'unknown';
+        let lastChecked: string | null = null;
+        let responseTime = 0;
+        let errorMessage: string | undefined;
+        const consecutiveFailures = 0;
+        const contentChanged = false;
+
+        if (latestLog) {
+          lastChecked = latestLog.fetchedAt?.toISOString() || null;
+          responseTime = latestLog.responseTimeMs || 0;
+          errorMessage = latestLog.errorMessage || undefined;
+
+          if (latestLog.status === 'SUCCESS') {
+            status = 'healthy';
+            healthy++;
+          } else if (latestLog.status === 'ERROR' || latestLog.status === 'TIMEOUT') {
+            status = 'unhealthy';
+            unhealthy++;
+          } else {
+            unknown++;
+          }
+        } else {
+          unknown++;
+        }
+
+        return {
+          id: source.id,
+          sourceId: source.id,
+          status,
+          lastChecked: lastChecked || '',
+          responseTime,
+          errorMessage,
+          consecutiveFailures,
+          contentChanged,
+        };
+      });
+
+      const totalSources = sources.length;
+
+      res.json({
+        status: 'success',
+        data: {
+          totalSources,
+          healthySources: healthy,
+          unhealthySources: unhealthy,
+          unknownSources: unknown,
+          sources: sourceHealthList,
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to get source health:', error);
       next(error);
     }
   }
