@@ -603,17 +603,19 @@ export class AggregationService {
 
         // Build and execute bulk INSERT ... ON CONFLICT DO UPDATE in chunks
         // to avoid exceeding SQLite's parameter limit (max 999 by default)
-        const GROUP_CHUNK_SIZE = 140; // 140 groups * 7 params = 980 < 999
+        const GROUP_CHUNK_SIZE = 140; // 140 groups * 8 params = 1120; we need to stay under 999, so use 120
+        const safeChunkSize = Math.min(GROUP_CHUNK_SIZE, Math.floor(999 / 8));
         const now = new Date();
 
-        for (let j = 0; j < groups.length; j += GROUP_CHUNK_SIZE) {
-          const chunk = groups.slice(j, j + GROUP_CHUNK_SIZE);
+        for (let j = 0; j < groups.length; j += safeChunkSize) {
+          const chunk = groups.slice(j, j + safeChunkSize);
           const placeholders: string[] = [];
           const chunkParams: any[] = [];
 
           for (const group of chunk) {
-            placeholders.push('(?, ?, ?, ?, ?, ?, ?)');
+            placeholders.push('(?, ?, ?, ?, ?, ?, ?, ?)');
             chunkParams.push(
+              crypto.randomUUID(), // Generate unique ID for new rows
               group.domain,
               group.normalized,
               group.entryType,
@@ -625,7 +627,7 @@ export class AggregationService {
           }
 
           const sql = `
-            INSERT INTO host_entries (domain, normalized, entryType, sourceId, firstSeen, lastSeen, occurrenceCount)
+            INSERT INTO host_entries (id, domain, normalized, entryType, sourceId, firstSeen, lastSeen, occurrenceCount)
             VALUES ${placeholders.join(', ')}
             ON CONFLICT(domain, sourceId) DO UPDATE SET
               entryType = excluded.entryType,
