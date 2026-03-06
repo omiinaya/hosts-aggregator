@@ -17,3 +17,4 @@ cmd = "cd /app/backend && npm start"
 [variables]
 NODE_ENV = "production"
 PORT = "3181"
+VITE_API_BASE_URL = "/api"

@@ -9,7 +9,7 @@ import {
   UpdateHostRequest,
 } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // Build query string from params
 const buildQueryString = (params: HostListParams): string => {
