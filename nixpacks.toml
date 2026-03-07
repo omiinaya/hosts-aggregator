@@ -18,3 +18,6 @@ cmd = "cd /app/backend && npm start"
 NODE_ENV = "production"
 PORT = "3181"
 VITE_API_BASE_URL = "/api"
+# Backend database & cache (override these in Coolify with real values)
+DATABASE_URL = "file:./dev.db"
+REDIS_URL = "redis://localhost:6379"
